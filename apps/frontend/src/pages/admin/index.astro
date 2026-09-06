@@ -1,0 +1,34 @@
+---
+export const prerender = false;
+import AdminApp from '../../components/admin/AdminApp';
+import '../../styles/global.css';
+
+const cookie = Astro.cookies.get('access_token');
+if (!cookie?.value) return Astro.redirect('/');
+
+let userName = 'Admin';
+try {
+  const payload = JSON.parse(atob(cookie.value.split('.')[1]));
+  userName = payload.name ?? 'Admin';
+} catch {}
+---
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin — Sarita</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-thumb { background: #dee2e6; border-radius: 99px; }
+  </style>
+</head>
+<body>
+  <AdminApp client:only="react" userName={userName} />
+</body>
+</html>

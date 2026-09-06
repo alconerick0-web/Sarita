@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <radialGradient id="bg" cx="40%" cy="35%" r="65%">
+      <stop offset="0%"   stop-color="#ff2a47"/>
+      <stop offset="100%" stop-color="#8b0000"/>
+    </radialGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="1.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Fondo circular rojo -->
+  <circle cx="32" cy="32" r="30" fill="url(#bg)"/>
+
+  <!-- Borde sutil -->
+  <circle cx="32" cy="32" r="30" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1.2"/>
+
+  <!-- Brillo superior -->
+  <ellipse cx="32" cy="20" rx="14" ry="6" fill="rgba(255,255,255,0.12)"/>
+
+  <!-- Letra S -->
+  <text
+    x="32" y="44"
+    text-anchor="middle"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="36"
+    font-weight="700"
+    fill="white"
+    filter="url(#glow)"
+    letter-spacing="-1"
+  >S</text>
+</svg>
