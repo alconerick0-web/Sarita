@@ -1,0 +1,124 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-sarita:      #ec0927;
+  --color-sarita-dark: #c0071e;
+  --font-sans: 'Inter', system-ui, sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+@keyframes navDropIn { from { opacity:0; transform:translateY(-6px) scale(.97) } to { opacity:1; transform:translateY(0) scale(1) } }
+@keyframes pageEnter { from { opacity:0; transform:translateY(14px) } to { opacity:1; transform:translateY(0) } }
+@keyframes mIn       { from { opacity:0; transform:scale(.92) translateY(12px) } to { opacity:1; transform:scale(1) translateY(0) } }
+
+::-webkit-scrollbar         { width: 5px; }
+::-webkit-scrollbar-thumb   { background: #3a0010; border-radius: 99px; }
+
+/* Glass dialog inputs */
+.g-inp {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(255,150,150,.3);
+  padding: .55rem .25rem;
+  color: rgba(255,255,255,.9);
+  font-size: .9rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-bottom-color .2s;
+}
+.g-inp:focus         { border-bottom-color: rgba(236,9,39,.7); }
+.g-inp::placeholder  { color: rgba(255,255,255,.3); }
+
+.g-sel {
+  width: 100%;
+  background: rgba(255,255,255,.07);
+  border: 1px solid rgba(255,150,150,.25);
+  border-radius: 8px;
+  padding: .55rem .75rem;
+  color: rgba(255,255,255,.85);
+  font-size: .9rem;
+  font-family: inherit;
+  outline: none;
+}
+.g-sel option { background: #1a0005; color: #fff; }
+
+.g-chk { accent-color: #ec0927; width: 16px; height: 16px; }
+
+.animate-nav-drop { animation: navDropIn .18s cubic-bezier(.4,0,.2,1); }
+.animate-page     { animation: pageEnter .35s cubic-bezier(.4,0,.2,1); }
+.animate-modal    { animation: mIn .25s cubic-bezier(.34,1.56,.64,1); }
+
+/* ───────────────────────── Responsive ───────────────────────── */
+html, body { max-width: 100%; overflow-x: hidden; }
+img, svg, video { max-width: 100%; }
+
+/* Tablet y menor */
+@media (max-width: 1024px) {
+  [style*="grid-template-columns: 1fr 340px"],
+  [style*="grid-template-columns: 1fr 300px"] { grid-template-columns: 1fr !important; }
+}
+
+/* Móvil */
+@media (max-width: 768px) {
+  /* Tablas: scroll horizontal dentro de su tarjeta */
+  table { display: block; width: 100% !important; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table th, table td { white-space: nowrap; }
+
+  /* Padding de páginas del admin */
+  main > div[style*="padding: 2rem 1.5rem"],
+  main > div[style*="padding: 2rem"] { padding: 1rem .85rem !important; }
+
+  /* Grids de formularios y KPIs */
+  [style*="grid-template-columns: 1fr 1fr 1fr"],
+  [style*="grid-template-columns: 1fr 1fr"],
+  [style*="grid-template-columns: repeat(3, 1fr)"] { grid-template-columns: 1fr !important; }
+  [style*="grid-template-columns: repeat(4, 1fr)"] { grid-template-columns: repeat(2, 1fr) !important; }
+  [style*="grid-template-columns: repeat(auto-fill, minmax(280px, 1fr))"] { grid-template-columns: 1fr !important; }
+
+  /* Filas flex con tarjetas (crear + exportar, encabezados) pasan a columna */
+  main [style*="display: flex"][style*="align-items: stretch"] { flex-direction: column !important; }
+}
+
+@media (max-width: 480px) {
+  [style*="grid-template-columns: repeat(4, 1fr)"] { grid-template-columns: 1fr 1fr !important; gap: .6rem !important; }
+  [style*="grid-template-columns: repeat(auto-fill, minmax(190px, 1fr))"] { grid-template-columns: repeat(2, 1fr) !important; gap: .6rem !important; }
+}
+
+@media (max-width: 768px) {
+  main div[style*="display: flex"]:not([style*="flex-direction: column"]):not([style*="flex-wrap"]) { flex-wrap: wrap; }
+  main td div[style*="display: flex"] { flex-wrap: nowrap !important; }
+}
+
+@media (max-width: 768px) {
+  .hide-mobile { display: none !important; }
+  header[style*="height: 60px"] { padding: 0 .75rem !important; gap: .6rem !important; }
+}
+
+@media (max-width: 768px) {
+  [style*="grid-template-columns: 1fr 110px 64px 32px"] { grid-template-columns: minmax(0, 1fr) 76px 40px 28px !important; gap: .4rem !important; }
+  main input, main select, main textarea { max-width: 100%; }
+}
+
+/* ── Punto de venta: paneles laterales como drawers en móvil ── */
+.show-mobile { display: none; }
+@media (max-width: 900px) {
+  .show-mobile { display: flex; align-items: center; justify-content: center; }
+  .emp-drawer {
+    position: fixed !important; top: 0 !important; height: 100dvh !important;
+    width: min(88vw, 320px) !important; z-index: 300;
+    transition: transform .25s cubic-bezier(.4,0,.2,1);
+    box-shadow: none;
+  }
+  .emp-left  { left: 0;  transform: translateX(-105%); }
+  .emp-right { right: 0; transform: translateX(105%); }
+  .emp-drawer.open { transform: translateX(0); box-shadow: 0 0 40px rgba(0,0,0,.35); }
+  .emp-drawer .show-mobile { display: flex; }
+}

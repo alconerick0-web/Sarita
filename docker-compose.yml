@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sarita_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-sarita}
+      POSTGRES_USER: ${POSTGRES_USER:-sarita_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sarita_pass}
+    ports:
+      - "5432:5432"
+    volumes:
+      - sarita_pgdata:/var/lib/postgresql/data
+
+volumes:
+  sarita_pgdata:

@@ -1,0 +1,186 @@
+---
+export const prerender = false;
+import LoginForm from '../components/auth/LoginForm';
+import '../styles/global.css';
+
+const cookie = Astro.cookies.get('access_token');
+if (cookie?.value) {
+  return Astro.redirect('/employee');
+}
+---
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Iniciar Sesión — Sarita</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+      -webkit-font-smoothing: antialiased;
+      overflow: hidden;
+      position: relative;
+
+      /* Fondo oscuro rojo profundo */
+      background: radial-gradient(ellipse at 30% 40%, #8b0000 0%, #4a0008 40%, #1a0003 100%);
+    }
+
+    /* Puntos de luz de fondo */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(circle at 15% 25%, rgba(236, 9, 39, 0.35) 0%, transparent 45%),
+        radial-gradient(circle at 85% 75%, rgba(192, 7, 30, 0.25) 0%, transparent 45%),
+        radial-gradient(circle at 70% 20%, rgba(255, 50, 80, 0.15) 0%, transparent 35%);
+      pointer-events: none;
+    }
+
+    /* Título Sarita fuera de la tarjeta */
+    .brand {
+      text-align: center;
+      margin-bottom: 2rem;
+      position: relative;
+      z-index: 1;
+    }
+
+    .brand h1 {
+      font-size: 2.8rem;
+      font-weight: 800;
+      letter-spacing: -1px;
+      color: #fff;
+      text-shadow:
+        0 0 20px rgba(236, 9, 39, 0.8),
+        0 0 40px rgba(236, 9, 39, 0.4),
+        0 2px 8px rgba(0,0,0,.5);
+    }
+
+    .brand p {
+      font-size: .75rem;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: rgba(255,255,255,.6);
+      margin-top: .35rem;
+      font-weight: 500;
+    }
+
+    /* Tarjeta glassmorphism */
+    .glass-card {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 360px;
+      padding: 2.5rem 2.2rem 2.2rem;
+      border-radius: 24px;
+
+      /* Vidrio esmerilado */
+      background: rgba(255, 255, 255, 0.07);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+
+      /* Borde brillante con tono rojo */
+      border: 1.5px solid rgba(255, 160, 160, 0.25);
+
+      /* Sombra con brillo rojo (el "neon glow") */
+      box-shadow:
+        0 0 0 1px rgba(236, 9, 39, 0.15),
+        0 0 30px rgba(236, 9, 39, 0.25),
+        0 0 80px rgba(236, 9, 39, 0.1),
+        0 20px 60px rgba(0, 0, 0, 0.5),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15),
+        inset 0 0 40px rgba(255, 255, 255, 0.03);
+    }
+
+    /* Brillo superior de la tarjeta */
+    .glass-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 10%; right: 10%;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255,200,200,.6), transparent);
+      border-radius: 50%;
+    }
+
+    /* Reloj */
+    .clock {
+      position: fixed;
+      bottom: 1.8rem;
+      right: 2rem;
+      z-index: 2;
+      text-align: right;
+      color: rgba(255, 255, 255, 0.7);
+      text-shadow: 0 0 10px rgba(236, 9, 39, 0.5);
+    }
+
+    .clock-time {
+      display: block;
+      font-size: 1.6rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: rgba(255,255,255,.9);
+    }
+
+    .clock-date {
+      display: block;
+      font-size: .68rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: rgba(255,255,255,.5);
+      margin-top: .1rem;
+    }
+
+    @media (max-width: 480px) {
+      .brand h1 { font-size: 2.2rem; }
+      .glass-card { padding: 2rem 1.6rem; }
+      .clock { bottom: 1rem; right: 1rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="brand">
+    <h1>Sarita</h1>
+    <p>Franquicia Chuscaj</p>
+  </div>
+
+  <div class="glass-card">
+    <LoginForm client:only="react" />
+  </div>
+
+  <div class="clock">
+    <span class="clock-time" id="clock-time">--:--:--</span>
+    <span class="clock-date" id="clock-date"></span>
+  </div>
+
+  <script>
+    const DAYS = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+    const MONTHS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+    function updateClock() {
+      // Hora de Guatemala (America/Guatemala = UTC-6, sin horario de verano)
+      const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Guatemala' }));
+      const h = String(now.getHours()).padStart(2, '0');
+      const m = String(now.getMinutes()).padStart(2, '0');
+      const s = String(now.getSeconds()).padStart(2, '0');
+      const timeEl = document.getElementById('clock-time');
+      const dateEl = document.getElementById('clock-date');
+      if (timeEl) timeEl.textContent = `${h}:${m}:${s}`;
+      if (dateEl) dateEl.textContent = `${DAYS[now.getDay()]} ${now.getDate()} ${MONTHS[now.getMonth()]}`;
+    }
+
+    updateClock();
+    setInterval(updateClock, 1000);
+  </script>
+</body>
+</html>
