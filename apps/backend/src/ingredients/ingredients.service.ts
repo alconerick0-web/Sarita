@@ -77,8 +77,28 @@ export class IngredientsService {
     return ingredient;
   }
 
-  async deductStock(ingredientId: number, quantity: number) {
+  async checkStock(requirements: { ingredientId: number; needed: number }[]) {
+    for (const { ingredientId, needed } of requirements) {
+      const ingredient = await this.findOne(ingredientId);
+      if (Number(ingredient.stockQuantity) < needed) {
+        throw new BadRequestException(
+          `Stock insuficiente de "${ingredient.name}": disponible ${ingredient.stockQuantity}, requerido ${needed}`,
+        );
+      }
+    }
+  }
+
+  async deductStock(ingredientId: number, quantity: number, reason?: string) {
     await this.repo.decrement({ id: ingredientId }, 'stockQuantity', quantity);
+    if (reason) {
+      const movement = this.movRepo.create({
+        ingredient: { id: ingredientId } as any,
+        type: MovementType.OUT,
+        quantity,
+        reason,
+      });
+      await this.movRepo.save(movement);
+    }
   }
 
   findMovements(ingredientId: number) {

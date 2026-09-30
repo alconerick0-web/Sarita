@@ -60,12 +60,29 @@ export class OrdersService {
     const order = await this.findOne(orderId);
     if (order.status !== OrderStatus.OPEN) throw new BadRequestException('La orden ya está cerrada');
 
+    // Build aggregated requirements and validate stock before any deduction
+    const required = new Map<number, number>();
+    const piByItem: { item: OrderItem; pis: { ingredient: any; totalUsed: number }[] }[] = [];
     for (const item of order.items) {
       const productIngredients = await this.productsService.getProductIngredients(item.product.id);
-      for (const pi of productIngredients) {
-        const totalUsed = Number(pi.quantityPerUnit) * item.quantity;
-        await this.ingredientsService.deductStock(pi.ingredient.id, totalUsed);
-        const used = this.usedRepo.create({ orderItem: item, ingredient: pi.ingredient, quantityUsed: totalUsed });
+      const pis = productIngredients.map((pi) => ({
+        ingredient: pi.ingredient,
+        totalUsed: Number(pi.quantityPerUnit) * item.quantity,
+      }));
+      piByItem.push({ item, pis });
+      for (const { ingredient, totalUsed } of pis) {
+        required.set(ingredient.id, (required.get(ingredient.id) ?? 0) + totalUsed);
+      }
+    }
+    await this.ingredientsService.checkStock(
+      Array.from(required.entries()).map(([ingredientId, needed]) => ({ ingredientId, needed })),
+    );
+
+    const reason = `Venta #${orderId}`;
+    for (const { item, pis } of piByItem) {
+      for (const { ingredient, totalUsed } of pis) {
+        await this.ingredientsService.deductStock(ingredient.id, totalUsed, reason);
+        const used = this.usedRepo.create({ orderItem: item, ingredient, quantityUsed: totalUsed });
         await this.usedRepo.save(used);
       }
     }

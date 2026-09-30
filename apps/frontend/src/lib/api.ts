@@ -34,6 +34,7 @@ export const api = {
   // Products
   products: (active = true) => request<any[]>(`/products${active ? '?active=true' : ''}`),
   product: (id: number) => request<any>(`/products/${id}`),
+  productIngredients: (id: number) => request<any[]>(`/products/${id}/ingredients`),
   createProduct: (data: any) => request('/products', { method: 'POST', body: JSON.stringify(data) }),
   updateProduct: (id: number, data: any) => request(`/products/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   toggleProduct: (id: number) => request(`/products/${id}/toggle`, { method: 'PATCH' }),

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../../lib/api';
 import { ErrorModal, ConfirmModal, GlassDialog } from '../ui/Modal';
 
@@ -9,308 +9,111 @@ type Flavor   = { id: number; name: string; color: string };
 type FlavorSel = { flavorId?: number; flavorName?: string };
 type CartItem = { product: Product; flavors: FlavorSel[]; quantity: number };
 
-// ─── Selector de Sabores (wizard paso a paso) ────────────────────────────────
-function FlavorPicker({ product, flavors, onAdd, onClose }:
+// ─── Selector de cantidad ────────────────────────────────────────────────────
+function FlavorPicker({ product, onAdd, onClose }:
   { product: Product; flavors: Flavor[]; onAdd: (items: CartItem[]) => void; onClose: () => void }) {
 
-  // bolasBase = scoops per unit (sum of flavorCount across requiresFlavor steps)
-  const bolasBase = (product.steps ?? [])
-    .filter((s) => s.requiresFlavor)
-    .reduce((sum, s) => sum + (s.flavorCount || 1), 0);
+  const R   = '#ec0927';
+  const RBG = '#fff0f2';
 
   const [quantity, setQuantity] = useState(1);
-  const totalSlots = bolasBase * quantity;
-
-  // step=-1 → quantity selection screen; step 0..totalSlots-1 → one scoop at a time
-  const [step, setStep] = useState(bolasBase === 0 ? -1 : -1);
-  const [sels, setSels] = useState<FlavorSel[]>(() => Array.from({ length: Math.max(totalSlots, 0) }, () => ({})));
   const total = Number(product.price) * quantity;
 
-  // Resize sels when quantity changes and reset to quantity screen
-  useEffect(() => {
-    setSels((prev) => Array.from({ length: Math.max(bolasBase * quantity, 0) }, (_, i) => prev[i] ?? {}));
-    setStep(-1);
-  }, [quantity, bolasBase]);
-
-  function pickFlavor(sel: FlavorSel) {
-    setSels((prev) => { const next = [...prev]; next[step] = sel; return next; });
-    // Auto-advance after picking
-    if (step < totalSlots - 1) {
-      setStep((s) => s + 1);
-    }
-  }
-
   function handleAdd() {
-    if (bolasBase === 0) {
-      onAdd([{ product, flavors: [], quantity }]);
-      return;
-    }
-    const items: CartItem[] = Array.from({ length: quantity }, (_, u) => ({
-      product,
-      flavors: sels.slice(u * bolasBase, (u + 1) * bolasBase),
-      quantity: 1,
-    }));
-    onAdd(items);
+    onAdd([{ product, flavors: [], quantity }]);
   }
-
-  const unitNum  = step === -1 ? 0 : Math.floor(step / bolasBase) + 1;  // 1-based
-  const bolaNum  = step === -1 ? 0 : (step % bolasBase) + 1;            // 1-based
-  const curSel   = step >= 0 ? sels[step] : null;
-  const isLast   = step === totalSlots - 1;
-  const allDone  = totalSlots === 0 || step >= totalSlots;
-
-  // Step label shown in the body
-  const stepLabel = bolasBase === 0
-    ? ''
-    : quantity > 1
-      ? `Unidad ${unitNum} · Bola ${bolaNum}`
-      : bolasBase > 1
-        ? `Bola ${bolaNum}`
-        : 'Sabor';
-
-  // Progress dots (max 12 shown)
-  const showDots = totalSlots > 0 && totalSlots <= 12;
 
   return (
     <div
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(15,17,23,.65)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', backdropFilter: 'blur(6px)' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div style={{ background: '#fff', borderRadius: 20, width: '100%', maxWidth: 480, maxHeight: '92vh', overflow: 'hidden', boxShadow: '0 24px 64px rgba(0,0,0,.28)', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ background: '#fff', borderRadius: 24, width: '100%', maxWidth: 360, boxShadow: '0 32px 80px rgba(0,0,0,.35)', overflow: 'hidden' }}>
 
-        {/* ── Header ── */}
-        <div style={{ background: 'linear-gradient(135deg, #ec0927 0%, #b91c1c 100%)', padding: '1.1rem 1.4rem', color: '#fff', flexShrink: 0 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        {/* Header */}
+        <div style={{ background: `linear-gradient(135deg, ${R}, #9f1239)`, padding: '1.1rem 1.4rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
-              <h2 style={{ fontSize: '1.15rem', fontWeight: 800, letterSpacing: '-.3px', lineHeight: 1.2 }}>{product.name}</h2>
-              {bolasBase > 0 && (
-                <p style={{ fontSize: '.72rem', opacity: .8, marginTop: '.18rem' }}>
-                  {bolasBase} bola{bolasBase !== 1 ? 's' : ''} por unidad
-                  {quantity > 1 ? ` · ${quantity} unidades` : ''}
-                </p>
-              )}
+              <h2 style={{ margin: 0, color: '#fff', fontSize: '1.2rem', fontWeight: 900, letterSpacing: '-.4px' }}>{product.name}</h2>
+              <p style={{ color: 'rgba(255,255,255,.7)', fontSize: '.75rem', marginTop: '.2rem' }}>
+                Q{Number(product.price).toFixed(2)} c/u
+              </p>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '.55rem' }}>
-              <span style={{ background: 'rgba(255,255,255,.22)', padding: '.28rem .85rem', borderRadius: 99, fontSize: '1rem', fontWeight: 800 }}>
-                Q{total.toFixed(2)}
+            <button onClick={onClose}
+              style={{ width: 30, height: 30, borderRadius: '50%', background: 'rgba(255,255,255,.18)', border: 'none', color: '#fff', fontSize: '1.15rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit' }}
+            >×</button>
+          </div>
+        </div>
+
+        {/* Cantidad */}
+        <div style={{ padding: '2rem 1.5rem' }}>
+          <p style={{ fontSize: '.62rem', fontWeight: 800, color: '#b0b8c4', textTransform: 'uppercase', letterSpacing: '1.6px', marginBottom: '1.5rem', textAlign: 'center' }}>
+            Cantidad
+          </p>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2rem', marginBottom: '2rem' }}>
+            <button
+              onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+              disabled={quantity === 1}
+              style={{
+                width: 52, height: 52, borderRadius: '50%',
+                border: `2px solid ${quantity === 1 ? '#e9ecef' : R}`,
+                background: quantity === 1 ? '#f8f9fa' : RBG,
+                color: quantity === 1 ? '#c4cad4' : R,
+                cursor: quantity === 1 ? 'default' : 'pointer',
+                fontSize: '1.6rem', fontWeight: 700,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: 'inherit', transition: 'all .15s',
+              }}
+            >−</button>
+            <div style={{ textAlign: 'center', minWidth: 60 }}>
+              <span style={{ display: 'block', fontWeight: 900, fontSize: '3.8rem', color: '#0f1117', lineHeight: 1 }}>{quantity}</span>
+              <span style={{ fontSize: '.7rem', color: '#adb5bd', fontWeight: 500 }}>
+                unidad{quantity !== 1 ? 'es' : ''}
               </span>
-              <button onClick={onClose}
-                style={{ background: 'rgba(255,255,255,.18)', color: '#fff', border: 'none', width: 28, height: 28, borderRadius: '50%', fontSize: '1.1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              >×</button>
             </div>
+            <button
+              onClick={() => setQuantity((q) => q + 1)}
+              style={{
+                width: 52, height: 52, borderRadius: '50%',
+                border: `2px solid ${R}`, background: RBG, color: R,
+                cursor: 'pointer', fontSize: '1.6rem', fontWeight: 700,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: 'inherit', transition: 'all .15s',
+              }}
+            >+</button>
           </div>
 
-          {/* Progress dots */}
-          {showDots && step >= 0 && (
-            <div style={{ display: 'flex', gap: 5, marginTop: '.7rem', flexWrap: 'wrap' }}>
-              {Array.from({ length: totalSlots }, (_, i) => (
-                <button key={i} onClick={() => setStep(i)}
-                  style={{
-                    width: i === step ? 22 : 8, height: 8, borderRadius: 99,
-                    background: i < step ? 'rgba(255,255,255,.9)' : i === step ? '#fff' : 'rgba(255,255,255,.3)',
-                    border: 'none', padding: 0, cursor: 'pointer', transition: 'all .2s',
-                  }}
-                />
-              ))}
-            </div>
-          )}
-          {totalSlots > 12 && step >= 0 && (
-            <p style={{ fontSize: '.7rem', opacity: .8, marginTop: '.6rem' }}>
-              Paso {step + 1} de {totalSlots}
-            </p>
-          )}
-        </div>
+          {/* Total */}
+          <div style={{ background: '#0f1117', borderRadius: 14, padding: '.9rem 1.2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem' }}>
+            <span style={{ color: 'rgba(255,255,255,.55)', fontWeight: 500, fontSize: '.82rem' }}>Total</span>
+            <span style={{ color: '#fff', fontWeight: 900, fontSize: '1.4rem', letterSpacing: '-.5px' }}>Q{total.toFixed(2)}</span>
+          </div>
 
-        {/* ── Body ── */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '1.4rem' }}>
-
-          {/* ── Pantalla inicial: cantidad ── */}
-          {step === -1 && (
-            <div>
-              <p style={{ fontSize: '.68rem', fontWeight: 700, color: '#adb5bd', textTransform: 'uppercase', letterSpacing: '1.3px', marginBottom: '1rem' }}>
-                ¿Cuántas unidades?
-              </p>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1.25rem', marginBottom: '1.5rem' }}>
-                <button onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                  style={{ width: 46, height: 46, borderRadius: '50%', border: '2px solid #dee2e6', background: '#fff', cursor: 'pointer', fontSize: '1.4rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit', color: '#374151', fontWeight: 700 }}
-                >−</button>
-                <span style={{ fontWeight: 900, fontSize: '2.2rem', color: '#111', minWidth: 44, textAlign: 'center', lineHeight: 1 }}>{quantity}</span>
-                <button onClick={() => setQuantity((q) => q + 1)}
-                  style={{ width: 46, height: 46, borderRadius: '50%', border: '2px solid #dee2e6', background: '#fff', cursor: 'pointer', fontSize: '1.4rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit', color: '#374151', fontWeight: 700 }}
-                >+</button>
-              </div>
-
-              {/* Summary of what will be asked */}
-              {bolasBase > 0 && (
-                <div style={{ background: '#fff8f8', border: '1.5px solid #fecaca', borderRadius: 12, padding: '.85rem 1rem', marginBottom: '.5rem' }}>
-                  <p style={{ fontSize: '.83rem', color: '#7f1d1d', fontWeight: 600, lineHeight: 1.5 }}>
-                    Se pedirá el sabor para <strong>{totalSlots} bola{totalSlots !== 1 ? 's' : ''}</strong>
-                    {quantity > 1 ? ` (${bolasBase} por unidad × ${quantity} unidades)` : ''}.
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ── Paso de sabor ── */}
-          {step >= 0 && step < totalSlots && (
-            <div>
-              {/* Step context label */}
-              <div style={{ marginBottom: '1rem' }}>
-                <p style={{ fontSize: '.68rem', fontWeight: 700, color: '#adb5bd', textTransform: 'uppercase', letterSpacing: '1.3px', marginBottom: '.2rem' }}>
-                  {stepLabel}
-                </p>
-                <p style={{ fontSize: '1.05rem', fontWeight: 800, color: '#111' }}>¿Qué sabor?</p>
-              </div>
-
-              {/* "Sin sabor" option */}
-              <button
-                onClick={() => pickFlavor({})}
-                style={{
-                  width: '100%', padding: '.65rem 1rem', borderRadius: 10, marginBottom: '.75rem',
-                  border: `2px solid ${!curSel?.flavorId ? '#ec0927' : '#e9ecef'}`,
-                  background: !curSel?.flavorId ? '#fff0f2' : '#fafafa',
-                  cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
-                  display: 'flex', alignItems: 'center', gap: '.55rem', transition: 'all .15s',
-                }}
-              >
-                <span style={{ width: 14, height: 14, borderRadius: '50%', background: '#e9ecef', flexShrink: 0, display: 'inline-block', border: '1.5px solid #dee2e6' }} />
-                <span style={{ fontSize: '.88rem', fontWeight: !curSel?.flavorId ? 700 : 500, color: !curSel?.flavorId ? '#ec0927' : '#6c757d' }}>
-                  Sin sabor específico
-                </span>
-              </button>
-
-              {/* Flavor grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '.5rem' }}>
-                {flavors.map((f) => {
-                  const sel = curSel?.flavorId === f.id;
-                  return (
-                    <button key={f.id}
-                      onClick={() => pickFlavor({ flavorId: f.id, flavorName: f.name })}
-                      style={{
-                        padding: '.8rem .5rem', borderRadius: 12,
-                        border: `2px solid ${sel ? '#ec0927' : '#e9ecef'}`,
-                        background: sel ? '#fff0f2' : '#fafafa',
-                        cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s',
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '.4rem',
-                      }}
-                      onMouseEnter={(e) => { if (!sel) e.currentTarget.style.borderColor = '#f9a8b4'; }}
-                      onMouseLeave={(e) => { if (!sel) e.currentTarget.style.borderColor = '#e9ecef'; }}
-                    >
-                      <div style={{
-                        width: 26, height: 26, borderRadius: '50%',
-                        background: f.color ?? '#ccc',
-                        boxShadow: sel ? `0 0 0 3px rgba(236,9,39,.25)` : '0 1px 3px rgba(0,0,0,.15)',
-                        transition: 'box-shadow .15s',
-                      }} />
-                      <span style={{ fontSize: '.78rem', fontWeight: sel ? 700 : 500, color: sel ? '#ec0927' : '#343a40', textAlign: 'center', lineHeight: 1.2 }}>
-                        {f.name}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Resumen de bolas ya elegidas (miniaturas) */}
-              {step > 0 && (
-                <div style={{ marginTop: '1.1rem', display: 'flex', gap: '.4rem', flexWrap: 'wrap' }}>
-                  {sels.slice(0, step).map((s, i) => {
-                    const fl = flavors.find((f) => f.id === s.flavorId);
-                    return (
-                      <button key={i} onClick={() => setStep(i)} title={fl?.name ?? 'Sin sabor'}
-                        style={{
-                          width: 28, height: 28, borderRadius: '50%', border: '2px solid #dee2e6',
-                          background: fl?.color ?? '#e9ecef', cursor: 'pointer', padding: 0,
-                          boxShadow: '0 1px 3px rgba(0,0,0,.12)', transition: 'transform .1s',
-                        }}
-                        onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.15)'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
-                      />
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* ── Footer ── */}
-        <div style={{ padding: '1rem 1.4rem', borderTop: '1px solid #e9ecef', flexShrink: 0, display: 'flex', gap: '.65rem' }}>
-
-          {/* Back button (show when in a flavor step) */}
-          {step >= 0 && (
-            <button onClick={() => setStep((s) => s - 1)}
-              style={{
-                flex: '0 0 auto', padding: '.82rem 1.1rem', borderRadius: 12,
-                border: '1.5px solid #dee2e6', background: '#fff',
-                color: '#374151', fontWeight: 700, fontSize: '.88rem',
-                cursor: 'pointer', fontFamily: 'inherit',
-                display: 'flex', alignItems: 'center', gap: '.4rem',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#fecaca'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#dee2e6'; }}
-            >
-              ← {step === 0 ? 'Cantidad' : 'Atrás'}
-            </button>
-          )}
-
-          {/* Main action button */}
-          {step === -1 ? (
-            bolasBase === 0 ? (
-              /* No flavor needed — add directly */
-              <button onClick={handleAdd}
-                style={{
-                  flex: 1, padding: '.82rem', borderRadius: 12, border: 'none',
-                  background: 'linear-gradient(135deg, #ec0927, #b91c1c)',
-                  color: '#fff', fontWeight: 800, fontSize: '.95rem', cursor: 'pointer',
-                  fontFamily: 'inherit', boxShadow: '0 4px 14px rgba(236,9,39,.35)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '.5rem',
-                }}
-              >
-                <span>🛒</span> Agregar · Q{total.toFixed(2)}
-              </button>
-            ) : (
-              /* Has scoops — start the wizard */
-              <button onClick={() => setStep(0)}
-                style={{
-                  flex: 1, padding: '.82rem', borderRadius: 12, border: 'none',
-                  background: 'linear-gradient(135deg, #ec0927, #b91c1c)',
-                  color: '#fff', fontWeight: 800, fontSize: '.95rem', cursor: 'pointer',
-                  fontFamily: 'inherit', boxShadow: '0 4px 14px rgba(236,9,39,.35)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '.5rem',
-                }}
-              >
-                Seleccionar sabores →
-              </button>
-            )
-          ) : isLast ? (
-            /* Last scoop — show add button */
-            <button onClick={handleAdd}
-              style={{
-                flex: 1, padding: '.82rem', borderRadius: 12, border: 'none',
-                background: 'linear-gradient(135deg, #ec0927, #b91c1c)',
-                color: '#fff', fontWeight: 800, fontSize: '.95rem', cursor: 'pointer',
-                fontFamily: 'inherit', boxShadow: '0 4px 14px rgba(236,9,39,.35)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '.5rem',
-              }}
-            >
-              <span>🛒</span> Agregar · Q{total.toFixed(2)}
-            </button>
-          ) : (
-            /* Middle steps — next */
+          {/* Botones */}
+          <div style={{ display: 'flex', gap: '.6rem' }}>
             <button
-              onClick={() => setStep((s) => s + 1)}
+              onClick={onClose}
               style={{
-                flex: 1, padding: '.82rem', borderRadius: 12, border: 'none',
-                background: 'linear-gradient(135deg, #ec0927, #b91c1c)',
-                color: '#fff', fontWeight: 800, fontSize: '.95rem', cursor: 'pointer',
-                fontFamily: 'inherit', boxShadow: '0 4px 14px rgba(236,9,39,.35)',
+                flex: 1, padding: '.82rem', borderRadius: 12,
+                border: '1.5px solid #e9ecef', background: '#fff',
+                color: '#495057', fontWeight: 600, fontSize: '.88rem',
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >Cancelar</button>
+            <button
+              onClick={handleAdd}
+              style={{
+                flex: 2, padding: '.82rem', borderRadius: 12, border: 'none',
+                background: `linear-gradient(135deg, ${R}, #9f1239)`,
+                color: '#fff', fontWeight: 800, fontSize: '.95rem',
+                cursor: 'pointer', fontFamily: 'inherit',
+                boxShadow: `0 4px 16px ${R}44`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '.5rem',
               }}
             >
-              Siguiente →
+              🛒 Agregar
             </button>
-          )}
+          </div>
         </div>
       </div>
     </div>
@@ -463,127 +266,134 @@ function InvoiceModal({ order, onClose }: { order: any; onClose: () => void }) {
   );
 }
 
-type SaleOrder = { id: number; invoiceNumber: string; total: number; completedAt: string; items: any[] };
+type SaleOrder = { id: number; invoiceNumber: string; total: number; completedAt: string; items: any[]; invoice?: { id: number } };
 
 // ─── Panel de Ventas del Día ──────────────────────────────────────────────────
 function VentasHoy({ sales, loading, userName }: { sales: SaleOrder[]; loading: boolean; userName: string }) {
   const totalDia = sales.reduce((s, o) => s + Number(o.total), 0);
+  const [showModal, setShowModal] = useState(false);
 
-  function handlePrint() {
-    const fecha     = new Date().toLocaleDateString('es-GT', { year: 'numeric', month: '2-digit', day: '2-digit' });
-    const diaNombre = new Date().toLocaleDateString('es-GT', { weekday: 'long' });
-    const hora      = new Date().toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' });
+  const fecha     = new Date().toLocaleDateString('es-GT', { year: 'numeric', month: '2-digit', day: '2-digit' });
+  const diaNombre = new Date().toLocaleDateString('es-GT', { weekday: 'long' });
+  const hora      = new Date().toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' });
 
-    const SEP  = '--------------------------------';
+  function buildHtml() {
     const filas = sales.length === 0
-      ? '<p style="text-align:center;color:#555;margin:8px 0">Sin ventas registradas.</p>'
-      : sales.map((order) => {
+      ? '<p style="text-align:center;margin:8px 0">Sin ventas registradas.</p>'
+      : sales.map((order, idx) => {
           const horaVenta = new Date(order.completedAt).toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' });
-          const nombres   = (order.items ?? [])
-            .map((it: any) => `${it.quantity > 1 ? `${it.quantity}x ` : ''}${it.product?.name ?? ''}`)
-            .filter(Boolean).join(', ');
           const facCorta  = order.invoiceNumber?.replace('FAC-', '') ?? order.id;
-          const totalStr  = `Q${Number(order.total).toFixed(2)}`;
-          // right-align total: pad left so line is ~32 chars
-          const leftPart  = `${horaVenta}  #${facCorta}`;
-          const pad       = Math.max(1, 32 - leftPart.length - totalStr.length);
+          const itemLines = (order.items ?? []).map((it: any) => {
+            const unit     = Number(it.unitPrice ?? it.price ?? 0);
+            const subtotal = unit * it.quantity;
+            const header   = `<div class="item-row"><span class="item-name">${it.product?.name ?? ''}</span><span class="item-price">Q${subtotal.toFixed(2)}</span></div>`;
+            const detail   = it.quantity > 1
+              ? `<div class="item-detail">Q${unit.toFixed(2)} &times; ${it.quantity}</div>`
+              : '';
+            return header + detail;
+          }).join('');
           return `
-            <div class="row">
-              <span class="row-left">${horaVenta} &nbsp;<span class="fac">#${facCorta}</span></span>
-              <span class="row-right">${totalStr}</span>
-            </div>
-            ${nombres ? `<div class="productos">${nombres}</div>` : ''}`;
+            <div class="orden${idx > 0 ? ' orden-sep' : ''}">
+              <div class="orden-header">
+                <span class="orden-hora">${horaVenta}</span>
+                <span class="orden-fac">&nbsp;#${facCorta}</span>
+                <span class="orden-total">Q${Number(order.total).toFixed(2)}</span>
+              </div>
+              ${itemLines ? `<div class="items">${itemLines}</div>` : ''}
+            </div>`;
         }).join('');
 
-    const html = `<!DOCTYPE html>
+    return `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8"/>
-  <title>Ventas del Día</title>
   <style>
-    @page { size: 80mm auto; margin: 0; }
+    @page { margin: 2mm 1mm; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: 'Courier New', Courier, monospace;
-      font-size: 11px;
-      color: #000;
-      width: 80mm;
-      display: flex;
-      justify-content: center;
+      font-size: 10pt; font-weight: 700; color: #000; width: 48mm;
+      -webkit-font-smoothing: none; font-smooth: never;
     }
-    .ticket {
-      width: 70mm;
-      padding: 6mm 0 10mm;
-    }
+    .ticket  { width: 48mm; padding: 2mm 0 10mm; }
     .center  { text-align: center; }
-    .bold    { font-weight: bold; }
-    .logo    { font-size: 20px; font-weight: 900; letter-spacing: -1px; }
-    .sep     { border: none; border-top: 1px dashed #000; margin: 5px 0; }
-    .sep-solid { border: none; border-top: 1px solid #000; margin: 5px 0; }
-    .meta    { font-size: 10px; line-height: 1.7; }
-    .title   { font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin: 4px 0; }
-    .row     { display: flex; justify-content: space-between; align-items: baseline; margin: 3px 0 0; }
-    .row-left  { font-size: 10.5px; }
-    .row-right { font-weight: bold; font-size: 10.5px; white-space: nowrap; }
-    .fac     { font-size: 9.5px; color: #333; }
-    .productos { font-size: 9.5px; color: #444; margin: 1px 0 5px 0; padding-left: 4px; }
-    .total-bloque { margin-top: 4px; }
-    .total-line { display: flex; justify-content: space-between; align-items: baseline; }
-    .total-label { font-size: 11px; font-weight: bold; text-transform: uppercase; }
-    .total-val   { font-size: 15px; font-weight: 900; }
-    .ventas-cnt  { font-size: 9.5px; color: #555; text-align: right; margin-top: 1px; }
-    .footer { margin-top: 8px; font-size: 9px; color: #555; text-align: center; line-height: 1.6; }
-    @media print { body { width: 80mm; } }
+    .logo    { font-size: 18pt; font-weight: 900; letter-spacing: -1px; }
+    .sub     { font-size: 7pt; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; margin-top: 1px; }
+    .sep       { border: none; border-top: 2px dashed #000; margin: 4px 0; }
+    .sep-solid { border: none; border-top: 2px solid #000; margin: 4px 0; }
+    .meta    { font-size: 9pt; font-weight: 700; line-height: 1.6; }
+    .title   { font-size: 8.5pt; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; margin: 3px 0; }
+    .orden     { margin: 3px 0 0; }
+    .orden-sep { border-top: 1px dashed #000; margin-top: 5px; padding-top: 4px; }
+    .orden-header { display: flex; align-items: baseline; }
+    .orden-hora  { font-size: 9pt; font-weight: 900; flex-shrink: 0; }
+    .orden-fac   { font-size: 7.5pt; font-weight: 700; flex: 1; }
+    .orden-total { font-size: 9pt; font-weight: 900; white-space: nowrap; }
+    .items       { padding-left: 6px; margin: 2px 0 1px; }
+    .item-row    { display: flex; justify-content: space-between; align-items: baseline; }
+    .item-name   { font-size: 8pt; font-weight: 700; flex: 1; }
+    .item-price  { font-size: 8pt; font-weight: 700; white-space: nowrap; margin-left: 3px; }
+    .item-detail { font-size: 7pt; font-weight: 700; padding-left: 3px; margin-bottom: 1px; }
+    .total-bloque { margin-top: 5px; }
+    .total-line   { display: flex; justify-content: space-between; align-items: baseline; }
+    .total-label  { font-size: 10pt; font-weight: 900; text-transform: uppercase; }
+    .total-val    { font-size: 17pt; font-weight: 900; }
+    .ventas-cnt   { font-size: 8pt; font-weight: 700; text-align: right; margin-top: 1px; }
+    .footer { margin-top: 7px; font-size: 7.5pt; font-weight: 700; text-align: center; line-height: 1.5; }
+    @media print { body { width: 48mm; } }
   </style>
 </head>
 <body>
 <div class="ticket">
   <div class="center">
     <div class="logo">Sarita</div>
-    <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;color:#333;margin-top:1px">Franquicia Chuscaj</div>
+    <div class="sub">Franquicia Chuscaj</div>
   </div>
-
-  <hr class="sep" style="margin-top:6px"/>
-
+  <hr class="sep" style="margin-top:5px"/>
   <div class="meta center">
-    <div class="bold" style="text-transform:capitalize">${diaNombre}, ${fecha}</div>
+    <div style="text-transform:capitalize">${diaNombre}, ${fecha}</div>
     <div>Vendedor: ${userName}</div>
   </div>
-
-  <hr class="sep-solid" style="margin-top:6px"/>
-  <div class="title center">Resumen de Ventas del Día</div>
-  <hr class="sep" style="margin-bottom:4px"/>
-
+  <hr class="sep-solid" style="margin-top:5px"/>
+  <div class="title center">Resumen de Ventas del Dia</div>
+  <hr class="sep" style="margin-bottom:3px"/>
   ${filas}
-
   <hr class="sep-solid" style="margin-top:6px"/>
-
   <div class="total-bloque">
     <div class="total-line">
-      <span class="total-label">Total del día</span>
+      <span class="total-label">Total del dia</span>
       <span class="total-val">Q${totalDia.toFixed(2)}</span>
     </div>
     <div class="ventas-cnt">${sales.length} venta${sales.length !== 1 ? 's' : ''} realizadas</div>
   </div>
-
   <hr class="sep" style="margin-top:8px"/>
   <div class="footer">
     Impreso: ${fecha} ${hora}<br/>
-    Sarita · Sistema de Punto de Venta
+    Sarita - Sistema de Punto de Venta
   </div>
 </div>
 </body>
 </html>`;
+  }
 
-    const win = window.open('', '_blank', 'width=340,height=600');
-    if (!win) return;
-    win.document.write(html);
-    win.document.close();
-    win.focus();
-    win.print();
+  function executePrint() {
+    const html = buildHtml();
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:none;';
+    document.body.appendChild(iframe);
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) { document.body.removeChild(iframe); return; }
+    doc.open(); doc.write(html); doc.close();
+    iframe.contentWindow?.focus();
+    setTimeout(() => {
+      iframe.contentWindow?.print();
+      setTimeout(() => document.body.removeChild(iframe), 1000);
+    }, 250);
+    setShowModal(false);
   }
 
   return (
+    <>
     <aside style={{ width: 280, background: '#fff', borderRight: '1px solid #e9ecef', display: 'flex', flexDirection: 'column', height: '100vh', position: 'sticky', top: 0, flexShrink: 0 }}>
 
       {/* Header */}
@@ -613,6 +423,7 @@ function VentasHoy({ sales, loading, userName }: { sales: SaleOrder[]; loading: 
           const nombres = (order.items ?? [])
             .map((it: any) => `${it.quantity > 1 ? `${it.quantity}× ` : ''}${it.product?.name ?? ''}`)
             .filter(Boolean);
+          const pdfUrl = order.invoice?.id ? api.invoicePdfUrl(order.invoice.id) : null;
           return (
             <div key={order.id} style={{ background: '#f8f9fa', borderRadius: 10, padding: '.75rem .9rem', marginBottom: '.5rem', border: '1px solid #f1f3f5' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '.4rem' }}>
@@ -627,9 +438,27 @@ function VentasHoy({ sales, loading, userName }: { sales: SaleOrder[]; loading: 
                     </div>
                   )}
                 </div>
-                <span style={{ fontWeight: 800, color: '#16a34a', fontSize: '.9rem', flexShrink: 0 }}>
-                  Q{Number(order.total).toFixed(2)}
-                </span>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '.3rem', flexShrink: 0 }}>
+                  <span style={{ fontWeight: 800, color: '#16a34a', fontSize: '.9rem' }}>
+                    Q{Number(order.total).toFixed(2)}
+                  </span>
+                  {pdfUrl && (
+                    <a
+                      href={pdfUrl}
+                      target="_blank"
+                      rel="noopener"
+                      style={{
+                        fontSize: '.65rem', fontWeight: 700, color: '#ec0927',
+                        textDecoration: 'none', background: '#fff0f2',
+                        border: '1px solid #fecaca', borderRadius: 6,
+                        padding: '.15rem .45rem', lineHeight: 1.4,
+                        display: 'flex', alignItems: 'center', gap: '.25rem',
+                      }}
+                    >
+                      ↓ PDF
+                    </a>
+                  )}
+                </div>
               </div>
             </div>
           );
@@ -645,7 +474,7 @@ function VentasHoy({ sales, loading, userName }: { sales: SaleOrder[]; loading: 
           </span>
         </div>
         <button
-          onClick={handlePrint}
+          onClick={() => setShowModal(true)}
           style={{
             width: '100%', padding: '.72rem', borderRadius: 10, border: 'none',
             background: 'linear-gradient(135deg, #ec0927, #b91c1c)',
@@ -660,6 +489,128 @@ function VentasHoy({ sales, loading, userName }: { sales: SaleOrder[]; loading: 
         </button>
       </div>
     </aside>
+
+    {/* ── Modal vista previa del ticket ── */}
+    {showModal && (
+      <div
+        onClick={() => setShowModal(false)}
+        style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 9999,
+        }}
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            background: '#fff', borderRadius: 16, padding: '1.5rem',
+            width: 320, maxHeight: '90vh', display: 'flex', flexDirection: 'column',
+            boxShadow: '0 20px 60px rgba(0,0,0,.35)',
+          }}
+        >
+          {/* Cabecera del modal */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <span style={{ fontWeight: 800, fontSize: '1rem', color: '#111' }}>Vista previa del ticket</span>
+            <button
+              onClick={() => setShowModal(false)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.3rem', color: '#9ca3af', lineHeight: 1 }}
+            >×</button>
+          </div>
+
+          {/* Ticket simulado */}
+          <div style={{
+            flex: 1, overflowY: 'auto', background: '#fafafa', border: '1px solid #e5e7eb',
+            borderRadius: 10, padding: '1rem',
+            fontFamily: "'Courier New', monospace", fontSize: 11, color: '#000', lineHeight: 1.55,
+          }}>
+            <div style={{ textAlign: 'center', fontWeight: 900, fontSize: 20, letterSpacing: -1 }}>Sarita</div>
+            <div style={{ textAlign: 'center', fontWeight: 700, fontSize: 9, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 5 }}>Franquicia Chuscaj</div>
+            <hr style={{ border: 'none', borderTop: '1px dashed #000', margin: '4px 0' }} />
+            <div style={{ textAlign: 'center', fontWeight: 700, textTransform: 'capitalize' }}>{diaNombre}, {fecha}</div>
+            <div style={{ textAlign: 'center' }}>Vendedor: {userName}</div>
+            <hr style={{ border: 'none', borderTop: '1px solid #000', margin: '5px 0' }} />
+            <div style={{ textAlign: 'center', fontWeight: 900, textTransform: 'uppercase', fontSize: 10, marginBottom: 3 }}>Resumen de Ventas del Dia</div>
+            <hr style={{ border: 'none', borderTop: '1px dashed #000', margin: '3px 0 2px' }} />
+
+            {sales.length === 0
+              ? <div style={{ textAlign: 'center', color: '#555', margin: '8px 0' }}>Sin ventas registradas.</div>
+              : sales.map((order, idx) => {
+                  const hv = new Date(order.completedAt).toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' });
+                  const fc = order.invoiceNumber?.replace('FAC-', '') ?? order.id;
+                  return (
+                    <div key={order.id} style={{ marginTop: idx > 0 ? 5 : 2, paddingTop: idx > 0 ? 4 : 0, borderTop: idx > 0 ? '1px dashed #ccc' : 'none' }}>
+                      <div style={{ display: 'flex', alignItems: 'baseline' }}>
+                        <span style={{ fontWeight: 900, fontSize: 11, flexShrink: 0 }}>{hv}</span>
+                        <span style={{ fontWeight: 700, fontSize: 9, flex: 1 }}>&nbsp;#{fc}</span>
+                        <span style={{ fontWeight: 900, fontSize: 11, whiteSpace: 'nowrap' }}>Q{Number(order.total).toFixed(2)}</span>
+                      </div>
+                      {(order.items ?? []).map((it: any, i: number) => {
+                        const unit     = Number(it.unitPrice ?? it.price ?? 0);
+                        const subtotal = unit * it.quantity;
+                        return (
+                          <div key={i} style={{ paddingLeft: 8 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, fontWeight: 700 }}>
+                              <span>{it.product?.name ?? ''}</span>
+                              <span style={{ marginLeft: 4, whiteSpace: 'nowrap' }}>Q{subtotal.toFixed(2)}</span>
+                            </div>
+                            {it.quantity > 1 && (
+                              <div style={{ fontSize: 8, fontWeight: 700, color: '#555' }}>
+                                Q{unit.toFixed(2)} × {it.quantity}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })
+            }
+
+            <hr style={{ border: 'none', borderTop: '1px solid #000', margin: '6px 0' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 900, fontSize: 14 }}>
+              <span>TOTAL DEL DIA</span>
+              <span>Q{totalDia.toFixed(2)}</span>
+            </div>
+            <div style={{ textAlign: 'right', fontSize: 9, fontWeight: 700, marginBottom: 4 }}>
+              {sales.length} venta{sales.length !== 1 ? 's' : ''} realizadas
+            </div>
+            <hr style={{ border: 'none', borderTop: '1px dashed #000', margin: '5px 0' }} />
+            <div style={{ textAlign: 'center', fontSize: 9, fontWeight: 700 }}>
+              Impreso: {fecha} {hora}<br />
+              Sarita - Sistema de Punto de Venta
+            </div>
+          </div>
+
+          {/* Botones */}
+          <div style={{ display: 'flex', gap: '.6rem', marginTop: '1rem' }}>
+            <button
+              onClick={() => setShowModal(false)}
+              style={{
+                flex: 1, padding: '.65rem', borderRadius: 10, border: '1px solid #e5e7eb',
+                background: '#fff', color: '#374151', fontWeight: 600, fontSize: '.85rem',
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={executePrint}
+              style={{
+                flex: 2, padding: '.65rem', borderRadius: 10, border: 'none',
+                background: 'linear-gradient(135deg, #ec0927, #b91c1c)',
+                color: '#fff', fontWeight: 700, fontSize: '.88rem',
+                cursor: 'pointer', fontFamily: 'inherit',
+                boxShadow: '0 3px 10px rgba(236,9,39,.3)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '.4rem',
+              }}
+            >
+              🖨️ Imprimir
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 
@@ -732,13 +683,85 @@ export default function EmployeeApp({ userName }: { userName: string }) {
     setCart((c) => c.filter((_, i) => i !== idx));
   }
 
+  function printOrderReceipt(order: any, items: CartItem[]) {
+    const BASE = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000';
+    const ahora = new Date();
+    const f = ahora.toLocaleDateString('es-GT', { year: 'numeric', month: '2-digit', day: '2-digit' });
+    const h = ahora.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' });
+    const total = items.reduce((s, i) => s + Number(i.product.price) * i.quantity, 0);
+    const itemLines = items.map((it) => {
+      const unit = Number(it.product.price);
+      const subtotal = unit * it.quantity;
+      const header = `<div class="row"><span class="row-left">${it.product.name}</span><span class="row-right">Q${subtotal.toFixed(2)}</span></div>`;
+      const detail = it.quantity > 1
+        ? `<div class="row-detail">Q${unit.toFixed(2)} &times; ${it.quantity} unidades</div>`
+        : '';
+      return header + detail;
+    }).join('');
+    const facNum = order?.invoiceNumber ?? '';
+    const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>
+<style>
+  @page { margin: 2mm 1mm; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Courier New',Courier,monospace; font-size:10pt; font-weight:700; color:#000; width:48mm; -webkit-font-smoothing:none; font-smooth:never; }
+  .ticket { width:48mm; padding:2mm 0 10mm; }
+  .center { text-align:center; }
+  .logo   { font-size:18pt; font-weight:900; letter-spacing:-1px; }
+  .sub    { font-size:7pt; font-weight:700; letter-spacing:2px; text-transform:uppercase; margin-top:1px; }
+  .sep       { border:none; border-top:2px dashed #000; margin:4px 0; }
+  .sep-solid { border:none; border-top:2px solid #000; margin:4px 0; }
+  .meta   { font-size:9pt; font-weight:700; line-height:1.6; }
+  .fac    { font-size:8pt; font-weight:700; }
+  .row    { display:flex; justify-content:space-between; align-items:baseline; margin:3px 0 0; }
+  .row-left   { font-size:9pt; font-weight:700; flex:1; }
+  .row-right  { font-size:9pt; font-weight:900; white-space:nowrap; }
+  .row-detail { font-size:7.5pt; font-weight:700; padding-left:4px; margin-bottom:1px; }
+  .total-line { display:flex; justify-content:space-between; align-items:baseline; margin-top:5px; }
+  .total-label { font-size:10pt; font-weight:900; text-transform:uppercase; }
+  .total-val   { font-size:17pt; font-weight:900; }
+  .footer { margin-top:7px; font-size:7.5pt; font-weight:700; text-align:center; line-height:1.5; }
+  @media print { body { width:48mm; } }
+</style></head><body>
+<div class="ticket">
+  <div class="center"><div class="logo">Sarita</div><div class="sub">Franquicia Chuscaj</div></div>
+  <hr class="sep" style="margin-top:5px"/>
+  <div class="meta center">
+    <div>${f} &nbsp; ${h}</div>
+    <div class="fac">${facNum}</div>
+  </div>
+  <hr class="sep-solid" style="margin-top:5px"/>
+  ${itemLines}
+  <hr class="sep-solid" style="margin-top:6px"/>
+  <div class="total-line">
+    <span class="total-label">Total</span>
+    <span class="total-val">Q${total.toFixed(2)}</span>
+  </div>
+  <hr class="sep" style="margin-top:8px"/>
+  <div class="footer">Sarita - Sistema de Punto de Venta</div>
+</div></body></html>`;
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:none;';
+    document.body.appendChild(iframe);
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) { document.body.removeChild(iframe); return; }
+    doc.open(); doc.write(html); doc.close();
+    iframe.contentWindow?.focus();
+    setTimeout(() => {
+      iframe.contentWindow?.print();
+      setTimeout(() => document.body.removeChild(iframe), 1000);
+    }, 250);
+  }
+
   async function handleComplete() {
     if (!orderId) return;
     setCompleting(true);
     try {
       const order = await api.completeOrder(orderId) as any;
-      setCompletedOrder(order);
+      const itemsSnapshot = [...cart];
+      setCart([]);
+      setOrderId(null);
       loadSales();
+      printOrderReceipt(order, itemsSnapshot);
     } catch (e: any) {
       setAppError(e.message ?? 'Error al completar la orden');
     } finally {
@@ -899,8 +922,6 @@ export default function EmployeeApp({ userName }: { userName: string }) {
         />
       )}
 
-      {/* Modal orden completada */}
-      {completedOrder && <InvoiceModal order={completedOrder} onClose={handleNewOrder} />}
 
       {/* Confirmar cancelación */}
       <ConfirmModal
