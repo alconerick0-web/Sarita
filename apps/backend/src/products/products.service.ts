@@ -1,20 +1,22 @@
-import { ConflictException, Injectable, NotFoundException, StreamableFile } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, StreamableFile } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Not, Repository } from 'typeorm';
 import { Product } from './entities/product.entity';
 import { ProductIngredient } from './entities/product-ingredient.entity';
+import { ProductComponent } from './entities/product-component.entity';
 
 @Injectable()
 export class ProductsService {
   constructor(
     @InjectRepository(Product) private readonly repo: Repository<Product>,
     @InjectRepository(ProductIngredient) private readonly piRepo: Repository<ProductIngredient>,
+    @InjectRepository(ProductComponent) private readonly pcRepo: Repository<ProductComponent>,
   ) {}
 
   findAll(onlyActive = false, line?: string) {
     return this.repo.find({
       where: { ...(onlyActive ? { active: true } : {}), ...(line ? { line } : {}) },
-      relations: { category: true, steps: true, productIngredients: { ingredient: true } },
+      relations: { category: true, steps: true, productIngredients: { ingredient: true }, components: { component: true } },
       order: { name: 'ASC' },
     });
   }
@@ -22,14 +24,14 @@ export class ProductsService {
   async findOne(id: number) {
     const p = await this.repo.findOne({
       where: { id },
-      relations: { category: true, steps: true, productIngredients: { ingredient: true } },
+      relations: { category: true, steps: true, productIngredients: { ingredient: true }, components: { component: true } },
     });
     if (!p) throw new NotFoundException('Producto no encontrado');
     return p;
   }
 
   async create(data: any) {
-    const { ingredients, categoryId, ...rest } = data;
+    const { ingredients, components, categoryId, ...rest } = data;
     if (rest.name) {
       const exists = await this.repo.findOne({ where: { name: rest.name } });
       if (exists) throw new ConflictException(`Ya existe un producto con el nombre "${rest.name}"`);
@@ -39,11 +41,14 @@ export class ProductsService {
     if (ingredients?.length) {
       await this.saveIngredients(saved.id as number, ingredients);
     }
+    if (components?.length) {
+      await this.saveComponents(saved.id as number, components);
+    }
     return this.findOne(saved.id as number);
   }
 
   async update(id: number, data: any) {
-    const { ingredients, categoryId, ...rest } = data;
+    const { ingredients, components, categoryId, ...rest } = data;
     const existing = await this.findOne(id);
     if (rest.name && rest.name !== existing.name) {
       const duplicate = await this.repo.findOne({ where: { name: rest.name, id: Not(id) } });
@@ -56,7 +61,32 @@ export class ProductsService {
       await this.piRepo.delete({ product: { id } });
       if (ingredients.length) await this.saveIngredients(id, ingredients);
     }
+    if (components !== undefined) {
+      await this.pcRepo.delete({ product: { id } });
+      if (components.length) await this.saveComponents(id, components);
+    }
     return this.findOne(id);
+  }
+
+  // Paletas que lleva la receta (por unidad vendida del producto)
+  async getProductComponents(productId: number) {
+    return this.pcRepo.find({
+      where: { product: { id: productId } },
+      relations: { component: true },
+    });
+  }
+
+  private async saveComponents(productId: number, components: { componentId: number; quantity: number }[]) {
+    const records = components
+      .filter((c) => Number(c.componentId) !== productId && Number(c.quantity) > 0)
+      .map((c) =>
+        this.pcRepo.create({
+          product: { id: productId } as any,
+          component: { id: Number(c.componentId) } as any,
+          quantity: Math.floor(Number(c.quantity)),
+        }),
+      );
+    return this.pcRepo.save(records);
   }
 
   async toggleActive(id: number) {
@@ -70,6 +100,21 @@ export class ProductsService {
     p.name = `${p.name}__deleted_${p.id}`;
     await this.repo.save(p);
     return this.repo.softRemove(p);
+  }
+
+  async checkStock(requirements: { productId: number; needed: number }[]) {
+    for (const { productId, needed } of requirements) {
+      const product = await this.findOne(productId);
+      if (Number(product.stockQuantity) < needed) {
+        throw new BadRequestException(
+          `Stock insuficiente de "${product.name}": disponible ${product.stockQuantity}, requerido ${needed}`,
+        );
+      }
+    }
+  }
+
+  async deductStock(productId: number, quantity: number) {
+    await this.repo.decrement({ id: productId }, 'stockQuantity', quantity);
   }
 
   async getProductIngredients(productId: number) {
@@ -115,8 +160,8 @@ export class ProductsService {
                 (pi, i) => `
               <tr style="background:${i % 2 === 0 ? '#ffffff' : '#f9fafb'}">
                 <td style="padding:7px 14px;color:#374151;font-size:12px">${pi.ingredient?.name ?? '—'}</td>
-                <td style="padding:7px 14px;color:#111;font-weight:700;text-align:right;font-size:12px">${Number(pi.quantityPerUnit)}</td>
-                <td style="padding:7px 14px;color:#6b7280;text-align:center;font-size:12px">${pi.ingredient?.unit ?? '—'}</td>
+                <td style="padding:7px 14px;color:#111;font-weight:700;text-align:right;font-size:12px">${pi.scoops ? `${pi.scoops} × ${Number(pi.ouncesPerScoop)} oz` : Number(pi.quantityPerUnit)}</td>
+                <td style="padding:7px 14px;color:#6b7280;text-align:center;font-size:12px">${pi.scoops ? 'bolitas' : pi.ingredient?.unit || '—'}</td>
               </tr>`,
               )
               .join('')
@@ -257,14 +302,21 @@ export class ProductsService {
     }
   }
 
-  private async saveIngredients(productId: number, ingredients: { ingredientId: number; quantityPerUnit: number }[]) {
-    const records = ingredients.map((i) =>
-      this.piRepo.create({
+  private async saveIngredients(
+    productId: number,
+    ingredients: { ingredientId: number; quantityPerUnit?: number; scoops?: number | null; ouncesPerScoop?: number | null }[],
+  ) {
+    const records = ingredients.map((i) => {
+      // Helado: el stock está en libras y la receta en bolitas × onzas (16 oz = 1 lb)
+      const byScoops = Number(i.scoops) > 0 && Number(i.ouncesPerScoop) > 0;
+      return this.piRepo.create({
         product: { id: productId } as any,
         ingredient: { id: i.ingredientId } as any,
-        quantityPerUnit: i.quantityPerUnit,
-      }),
-    );
+        quantityPerUnit: byScoops ? (Number(i.scoops) * Number(i.ouncesPerScoop)) / 16 : Number(i.quantityPerUnit),
+        scoops: byScoops ? Number(i.scoops) : null,
+        ouncesPerScoop: byScoops ? Number(i.ouncesPerScoop) : null,
+      });
+    });
     return this.piRepo.save(records);
   }
 }

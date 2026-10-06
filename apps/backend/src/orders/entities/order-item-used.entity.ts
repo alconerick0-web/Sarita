@@ -15,6 +15,6 @@ export class OrderItemUsed {
   @JoinColumn({ name: 'ingredient_id' })
   ingredient: Ingredient;
 
-  @Column({ name: 'quantity_used', type: 'decimal', precision: 10, scale: 2 })
+  @Column({ name: 'quantity_used', type: 'decimal', precision: 14, scale: 5 })
   quantityUsed: number;
 }

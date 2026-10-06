@@ -13,6 +13,7 @@ import {
 import { Category } from '../../categories/entities/category.entity';
 import { ProductStep } from './product-step.entity';
 import { ProductIngredient } from './product-ingredient.entity';
+import { ProductComponent } from './product-component.entity';
 
 @Entity('products')
 @Index('idx_products_active', ['active'])
@@ -42,6 +43,10 @@ export class Product {
   @Column({ default: 'heladeria' })
   line: string;
 
+  // Solo paletería: se vende por unidad sin receta, así que el inventario vive en el producto
+  @Column({ name: 'stock_quantity', type: 'int', default: 0 })
+  stockQuantity: number;
+
   @Column({ default: true })
   active: boolean;
 
@@ -54,6 +59,9 @@ export class Product {
 
   @OneToMany(() => ProductIngredient, (pi) => pi.product, { cascade: true })
   productIngredients: ProductIngredient[];
+
+  @OneToMany(() => ProductComponent, (pc) => pc.product)
+  components: ProductComponent[];
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

@@ -17,7 +17,7 @@ export class Ingredient {
   @Column()
   unit: string;
 
-  @Column({ name: 'stock_quantity', type: 'decimal', precision: 10, scale: 2, default: 0 })
+  @Column({ name: 'stock_quantity', type: 'decimal', precision: 14, scale: 5, default: 0 })
   stockQuantity: number;
 
   @Column({ name: 'min_threshold', type: 'decimal', precision: 10, scale: 2, default: 0 })

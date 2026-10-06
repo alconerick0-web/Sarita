@@ -1439,7 +1439,9 @@ function CategoriesPanel({ line = "heladeria" }: { line?: string }) {
 }
 
 // ─── Product Form ─────────────────────────────────────────────────────────────
-type IngRow = { ingredientId: number | ""; quantity: number | "" };
+// Para helado la cantidad se escribe como bolitas × onzas por bolita (el backend lo pasa a libras)
+type IngRow = { ingredientId: number | ""; quantity: number | ""; scoops: number | ""; ounces: number | "" };
+const OZ_PER_LB = 16;
 
 function ProductForm({
   initial,
@@ -1460,11 +1462,15 @@ function ProductForm({
   const [unitCost, setUnitCost] = useState("");
   const [price, setPrice] = useState("");
   const [containerSize, setContainerSize] = useState("");
+  const [stockQuantity, setStockQuantity] = useState("");
   const [categoryId, setCategoryId] = useState<number | "">("");
   const [active, setActive] = useState(true);
   const [ingRows, setIngRows] = useState<IngRow[]>([]);
+  // Paletas usadas como parte de la receta (se descuentan de su stock al vender)
+  const [compRows, setCompRows] = useState<{ componentId: number | ""; quantity: number | "" }[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [allIngredients, setAllIngredients] = useState<any[]>([]);
+  const [allPaletas, setAllPaletas] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(!isEdit);
@@ -1472,6 +1478,7 @@ function ProductForm({
   useEffect(() => {
     api.allCategories(line).then(setCategories).catch(() => {});
     if (!isPal) api.ingredients().then(setAllIngredients).catch(() => {});
+    if (!isPal) api.products(true, "paleteria").then(setAllPaletas).catch(() => {});
     if (isEdit) {
       api.product(initial.id).then((p: any) => {
         setName(p.name ?? "");
@@ -1479,13 +1486,21 @@ function ProductForm({
         setUnitCost(String(p.unitCost ?? ""));
         setPrice(String(p.price ?? ""));
         setContainerSize(p.containerSize ?? "");
+        setStockQuantity(String(p.stockQuantity ?? ""));
         setCategoryId(p.category?.id ?? "");
         setActive(p.active ?? true);
         setIngRows(
           (p.productIngredients ?? []).map((pi: any) => ({
             ingredientId: pi.ingredient?.id ?? "",
             quantity: Number(pi.quantityPerUnit) || "",
+            scoops: Number(pi.scoops) || "",
+            ounces: Number(pi.ouncesPerScoop) || "",
           })),
+        );
+        setCompRows(
+          (p.components ?? [])
+            .filter((pc: any) => pc.component)
+            .map((pc: any) => ({ componentId: pc.component.id, quantity: Number(pc.quantity) || "" })),
         );
         setLoaded(true);
       }).catch(() => setLoaded(true));
@@ -1493,7 +1508,7 @@ function ProductForm({
   }, []);
 
   function addIngredient() {
-    setIngRows((r) => [...r, { ingredientId: "", quantity: "" }]);
+    setIngRows((r) => [...r, { ingredientId: "", quantity: "", scoops: "", ounces: "" }]);
   }
 
   function removeIngredient(idx: number) {
@@ -1517,9 +1532,19 @@ function ProductForm({
         categoryId: Number(categoryId),
         line,
         active,
+        ...(isPal ? { stockQuantity: Math.max(0, Math.floor(Number(stockQuantity) || 0)) } : {}),
         ingredients: ingRows
-          .filter((r) => r.ingredientId !== "" && r.quantity !== "")
-          .map((r) => ({ ingredientId: Number(r.ingredientId), quantityPerUnit: Number(r.quantity) })),
+          .filter(rowComplete)
+          .map((r) =>
+            isHeladoRow(r)
+              ? { ingredientId: Number(r.ingredientId), scoops: Number(r.scoops), ouncesPerScoop: Number(r.ounces) }
+              : { ingredientId: Number(r.ingredientId), quantityPerUnit: Number(r.quantity) },
+          ),
+        ...(isPal ? {} : {
+          components: compRows
+            .filter((c) => c.componentId !== "" && Number(c.quantity) > 0)
+            .map((c) => ({ componentId: Number(c.componentId), quantity: Math.floor(Number(c.quantity)) })),
+        }),
       };
       const saved = isEdit
         ? await api.updateProduct(initial.id, payload)
@@ -1542,6 +1567,20 @@ function ProductForm({
   const blur  = (e: React.FocusEvent<any>)                 => { e.currentTarget.style.borderColor = "#e9ecef"; };
 
   const ingMap = new Map(allIngredients.map((i) => [i.id, i]));
+
+  function isHeladoRow(r: IngRow) {
+    return ingMap.get(Number(r.ingredientId))?.category === "helado";
+  }
+  function rowComplete(r: IngRow) {
+    if (r.ingredientId === "") return false;
+    return isHeladoRow(r) ? Number(r.scoops) > 0 && Number(r.ounces) > 0 : r.quantity !== "";
+  }
+  function rowLabel(r: IngRow) {
+    const name = ingMap.get(Number(r.ingredientId))?.name ?? "";
+    if (!isHeladoRow(r)) return `${r.quantity} de ${name}`;
+    const oz = Number(r.scoops) * Number(r.ounces);
+    return `${r.scoops} bolita${Number(r.scoops) !== 1 ? "s" : ""} de ${r.ounces} oz de ${name} (${oz} oz = ${(oz / OZ_PER_LB).toFixed(3)} lb)`;
+  }
 
   return (
     <div style={{ maxWidth: 820, margin: "0 auto", padding: "2rem 1.5rem", animation: "pageEnter .35s cubic-bezier(.4,0,.2,1)" }}>
@@ -1586,7 +1625,7 @@ function ProductForm({
                 <input type="number" style={inp} value={price} placeholder="0.00" min={0} step="0.01" onChange={(e) => setPrice(e.target.value)} onFocus={(e) => focus(e)} onBlur={blur} />
               </div>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: isPal ? "1fr 1fr 1fr" : "1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
               <div>
                 <label style={{ fontSize: ".75rem", fontWeight: 600, color: "#6c757d", textTransform: "uppercase", letterSpacing: ".4px", display: "block", marginBottom: ".4rem" }}>Categoría *</label>
                 <Combobox
@@ -1600,6 +1639,12 @@ function ProductForm({
                 <label style={{ fontSize: ".75rem", fontWeight: 600, color: "#6c757d", textTransform: "uppercase", letterSpacing: ".4px", display: "block", marginBottom: ".4rem" }}>Tamaño de Envase</label>
                 <input style={inp} value={containerSize} placeholder="Ej. 16 oz, Grande, Mediano" onChange={(e) => setContainerSize(e.target.value)} onFocus={(e) => focus(e)} onBlur={blur} />
               </div>
+              {isPal && (
+                <div>
+                  <label style={{ fontSize: ".75rem", fontWeight: 600, color: "#6c757d", textTransform: "uppercase", letterSpacing: ".4px", display: "block", marginBottom: ".4rem" }}>Stock (unidades)</label>
+                  <input type="number" style={inp} value={stockQuantity} placeholder="0" min={0} step="1" onChange={(e) => setStockQuantity(e.target.value)} onFocus={(e) => focus(e)} onBlur={blur} />
+                </div>
+              )}
             </div>
             <div style={{ marginBottom: "1rem" }}>
               <label style={{ fontSize: ".75rem", fontWeight: 600, color: "#6c757d", textTransform: "uppercase", letterSpacing: ".4px", display: "block", marginBottom: ".4rem" }}>Descripción</label>
@@ -1634,8 +1679,8 @@ function ProductForm({
 
             {/* Column headers */}
             {ingRows.length > 0 && (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 110px 64px 32px", gap: ".6rem", padding: "0 0 .4rem", marginBottom: ".25rem", borderBottom: "1px solid #f1f3f5" }}>
-                {["Ingrediente", "Cantidad", "Unidad", ""].map((h) => (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 230px 32px", gap: ".6rem", padding: "0 0 .4rem", marginBottom: ".25rem", borderBottom: "1px solid #f1f3f5" }}>
+                {["Ingrediente", "Cantidad", ""].map((h) => (
                   <span key={h} style={{ fontSize: ".68rem", fontWeight: 700, color: "#b0b8c4", textTransform: "uppercase", letterSpacing: ".5px" }}>{h}</span>
                 ))}
               </div>
@@ -1649,35 +1694,42 @@ function ProductForm({
             )}
 
             {ingRows.map((row, idx) => {
-              const ing = ingMap.get(Number(row.ingredientId));
+              const helado = isHeladoRow(row);
+              const numInput = (value: number | "", onChange: (v: number | "") => void, placeholder: string, step: string) => (
+                <input
+                  type="number"
+                  value={value ?? ""}
+                  onChange={(e) => onChange(e.target.value === "" ? "" : Number(e.target.value))}
+                  style={{ ...inp, padding: ".55rem .65rem", textAlign: "right" }}
+                  placeholder={placeholder}
+                  min={0}
+                  step={step}
+                  onFocus={(e) => focus(e, "#0ea5e9")}
+                  onBlur={blur}
+                />
+              );
               return (
-                <div key={idx} style={{ display: "grid", gridTemplateColumns: "1fr 110px 64px 32px", gap: ".6rem", alignItems: "center", marginBottom: ".45rem" }}>
+                <div key={idx} style={{ display: "grid", gridTemplateColumns: "1fr 230px 32px", gap: ".6rem", alignItems: "center", marginBottom: ".45rem" }}>
                   {/* Ingredient selector */}
                   <Combobox
                     value={row.ingredientId ?? ""}
                     onChange={(v) => updateIngredient(idx, { ingredientId: v === "" ? "" : Number(v) })}
-                    options={allIngredients.map((i) => ({ value: i.id, label: i.name, description: i.unit }))}
+                    options={allIngredients.map((i) => ({ value: i.id, label: i.name }))}
                     placeholder="— Seleccionar —"
                     accent="#0ea5e9"
                   />
 
-                  {/* Quantity */}
-                  <input
-                    type="number"
-                    value={row.quantity ?? ""}
-                    onChange={(e) => updateIngredient(idx, { quantity: e.target.value === "" ? "" : Number(e.target.value) })}
-                    style={{ ...inp, padding: ".55rem .65rem", textAlign: "right" }}
-                    placeholder="0"
-                    min={0}
-                    step="0.5"
-                    onFocus={(e) => focus(e, "#0ea5e9")}
-                    onBlur={blur}
-                  />
-
-                  {/* Unit badge */}
-                  <div style={{ padding: ".45rem .5rem", borderRadius: 7, background: ing ? "#f0f9ff" : "#f8fafc", border: `1px solid ${ing ? "#bae6fd" : "#e9ecef"}`, textAlign: "center", fontSize: ".75rem", fontWeight: 600, color: ing ? "#0369a1" : "#b0b8c4", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {ing?.unit ?? "—"}
-                  </div>
+                  {/* Quantity: helado en bolitas × onzas, lo demás en cantidad simple */}
+                  {helado ? (
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr auto", gap: ".3rem", alignItems: "center" }}>
+                      {numInput(row.scoops, (v) => updateIngredient(idx, { scoops: v }), "Bolitas", "1")}
+                      <span style={{ fontSize: ".72rem", color: "#94a3b8", fontWeight: 600 }}>×</span>
+                      {numInput(row.ounces, (v) => updateIngredient(idx, { ounces: v }), "Oz", "0.5")}
+                      <span style={{ fontSize: ".72rem", color: "#94a3b8", fontWeight: 600 }}>oz</span>
+                    </div>
+                  ) : (
+                    numInput(row.quantity, (v) => updateIngredient(idx, { quantity: v }), "0", "0.5")
+                  )}
 
                   {/* Remove */}
                   <button
@@ -1693,15 +1745,74 @@ function ProductForm({
             })}
 
             {/* Recipe summary */}
-            {ingRows.filter((r) => r.ingredientId && r.quantity).length > 0 && (
+            {ingRows.filter(rowComplete).length > 0 && (
               <div style={{ marginTop: "1rem", padding: ".65rem .85rem", borderRadius: 10, background: "#f0f9ff", border: "1px solid #bae6fd", fontSize: ".8rem", color: "#0369a1" }}>
-                <strong>{ingRows.filter((r) => r.ingredientId && r.quantity).length}</strong> ingrediente{ingRows.filter((r) => r.ingredientId && r.quantity).length !== 1 ? "s" : ""} en la receta —{" "}
-                {ingRows
-                  .filter((r) => r.ingredientId && r.quantity)
-                  .map((r) => `${r.quantity} ${ingMap.get(Number(r.ingredientId))?.unit ?? ""} de ${ingMap.get(Number(r.ingredientId))?.name ?? ""}`)
-                  .join(", ")}
+                <strong>{ingRows.filter(rowComplete).length}</strong> ingrediente{ingRows.filter(rowComplete).length !== 1 ? "s" : ""} en la receta —{" "}
+                {ingRows.filter(rowComplete).map(rowLabel).join(", ")}
               </div>
             )}
+          </div>
+          )}
+
+          {/* ── Paletas en la receta ── */}
+          {!isPal && (
+          <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #e9ecef", padding: "1.5rem", marginBottom: "1rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
+              <div>
+                <p style={{ fontSize: ".68rem", fontWeight: 700, color: "#adb5bd", textTransform: "uppercase", letterSpacing: "1.2px", display: "flex", alignItems: "center", gap: ".5rem" }}>
+                  <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "#a855f7" }} />
+                  Paletas en la receta
+                </p>
+                <p style={{ fontSize: ".78rem", color: "#b0b8c4", marginTop: ".25rem" }}>
+                  Si este producto lleva paletas, agrégalas aquí — se descuentan de su stock en cada venta
+                </p>
+              </div>
+              <button
+                onClick={() => setCompRows((r) => [...r, { componentId: "", quantity: 1 }])}
+                style={{ padding: ".38rem .9rem", border: "1.5px solid #a855f7", borderRadius: 8, background: "#faf5ff", color: "#a855f7", cursor: "pointer", fontSize: ".78rem", fontWeight: 700, fontFamily: "inherit", flexShrink: 0 }}
+              >
+                + Agregar paleta
+              </button>
+            </div>
+
+            {compRows.length === 0 && (
+              <p style={{ textAlign: "center", padding: "1rem 0", color: "#b0b8c4", fontSize: ".85rem" }}>Esta receta no lleva paletas</p>
+            )}
+
+            {compRows.map((row, idx) => {
+              const pal = allPaletas.find((p) => p.id === Number(row.componentId));
+              return (
+                <div key={idx} style={{ display: "grid", gridTemplateColumns: "1fr 110px 32px", gap: ".6rem", alignItems: "center", marginBottom: ".45rem" }}>
+                  <Combobox
+                    value={row.componentId ?? ""}
+                    onChange={(v) => setCompRows((r) => r.map((c, i) => (i === idx ? { ...c, componentId: v === "" ? "" : Number(v) } : c)))}
+                    options={allPaletas.map((p) => ({ value: p.id, label: p.name, description: `Stock: ${Number(p.stockQuantity) || 0}` }))}
+                    placeholder="— Seleccionar paleta —"
+                    accent="#a855f7"
+                  />
+                  <input
+                    type="number"
+                    value={row.quantity ?? ""}
+                    onChange={(e) => setCompRows((r) => r.map((c, i) => (i === idx ? { ...c, quantity: e.target.value === "" ? "" : Number(e.target.value) } : c)))}
+                    style={{ ...inp, padding: ".55rem .65rem", textAlign: "right" }}
+                    placeholder="1"
+                    min={1}
+                    step="1"
+                    title={pal ? `Stock actual: ${Number(pal.stockQuantity) || 0}` : undefined}
+                    onFocus={(e) => focus(e, "#a855f7")}
+                    onBlur={blur}
+                  />
+                  <button
+                    onClick={() => setCompRows((r) => r.filter((_, i) => i !== idx))}
+                    style={{ background: "none", border: "none", color: "#dee2e6", cursor: "pointer", fontSize: "1.3rem", lineHeight: 1, padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.color = "#ec0927"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = "#dee2e6"; }}
+                  >
+                    ×
+                  </button>
+                </div>
+              );
+            })}
           </div>
           )}
 
@@ -1912,7 +2023,7 @@ function ProductsPanel({ line = "heladeria" }: { line?: string }) {
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".88rem" }}>
           <thead>
             <tr style={{ background: "#f8f9fa" }}>
-              {["#", "Nombre", "Categoría", "P. Unitario", "P. Venta", "Envase", "Estado", "Acciones"].map((h) => (
+              {["#", "Nombre", "Categoría", "P. Unitario", "P. Venta", isPal ? "Stock" : "Envase", "Estado", "Acciones"].map((h) => (
                 <th key={h} style={{ padding: ".9rem 1.25rem", textAlign: "left", fontWeight: 600, color: "#6c757d", fontSize: ".8rem", textTransform: "uppercase", letterSpacing: ".4px" }}>
                   {h}
                 </th>
@@ -1932,7 +2043,15 @@ function ProductsPanel({ line = "heladeria" }: { line?: string }) {
                       {Number(p.unitCost) > 0 ? `Q${Number(p.unitCost).toFixed(2)}` : <span style={{ color: "#dee2e6" }}>—</span>}
                     </td>
                     <td style={{ padding: ".85rem 1.25rem", color: "#ec0927", fontWeight: 700 }}>Q{Number(p.price).toFixed(2)}</td>
-                    <td style={{ padding: ".85rem 1.25rem", color: "#6c757d" }}>{p.containerSize}</td>
+                    {isPal ? (
+                      <td style={{ padding: ".85rem 1.25rem" }}>
+                        <span style={{ padding: ".3rem .8rem", borderRadius: 99, fontSize: ".78rem", fontWeight: 700, background: Number(p.stockQuantity) > 0 ? "#e0f2fe" : "#f8d7da", color: Number(p.stockQuantity) > 0 ? "#0369a1" : "#721c24" }}>
+                          {Number(p.stockQuantity) || 0} u.
+                        </span>
+                      </td>
+                    ) : (
+                      <td style={{ padding: ".85rem 1.25rem", color: "#6c757d" }}>{p.containerSize}</td>
+                    )}
                     <td style={{ padding: ".85rem 1.25rem" }}>
                       <span style={{ padding: ".3rem .8rem", borderRadius: 99, fontSize: ".78rem", fontWeight: 700, background: p.active ? "#d4edda" : "#f8d7da", color: p.active ? "#155724" : "#721c24" }}>
                         {p.active ? "● Activo" : "○ Inactivo"}
@@ -1980,11 +2099,22 @@ function ProductsPanel({ line = "heladeria" }: { line?: string }) {
                                 .sort((a, b) => (a.ingredient?.name ?? "").localeCompare(b.ingredient?.name ?? ""))
                                 .map((pi) => (
                                   <div key={pi.id} style={{ display: "inline-flex", alignItems: "center", gap: ".3rem", padding: ".3rem .75rem", borderRadius: 99, background: "#f0f9ff", border: "1px solid #bae6fd", fontSize: ".8rem", lineHeight: 1.3 }}>
-                                    <span style={{ fontWeight: 700, color: "#0369a1" }}>{Number(pi.quantityPerUnit)}</span>
-                                    <span style={{ color: "#64748b", fontSize: ".72rem" }}>{pi.ingredient?.unit}</span>
+                                    <span style={{ fontWeight: 700, color: "#0369a1" }}>{pi.scoops ? `${pi.scoops} × ${Number(pi.ouncesPerScoop)}` : Number(pi.quantityPerUnit)}</span>
+                                    <span style={{ color: "#64748b", fontSize: ".72rem" }}>{pi.scoops ? "oz" : pi.ingredient?.unit}</span>
                                     <span style={{ color: "#0f172a", fontWeight: 500 }}>{pi.ingredient?.name}</span>
                                   </div>
                                 ))}
+                            </div>
+                          )}
+                          {(p.components ?? []).some((pc: any) => pc.component) && (
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: ".45rem", marginTop: ".55rem" }}>
+                              {(p.components as any[]).filter((pc) => pc.component).map((pc) => (
+                                <div key={pc.id} style={{ display: "inline-flex", alignItems: "center", gap: ".3rem", padding: ".3rem .75rem", borderRadius: 99, background: "#faf5ff", border: "1px solid #e9d5ff", fontSize: ".8rem", lineHeight: 1.3 }}>
+                                  <span style={{ fontWeight: 700, color: "#7e22ce" }}>{pc.quantity}</span>
+                                  <span style={{ color: "#64748b", fontSize: ".72rem" }}>🍡</span>
+                                  <span style={{ color: "#0f172a", fontWeight: 500 }}>{pc.component.name}</span>
+                                </div>
+                              ))}
                             </div>
                           )}
                         </div>
@@ -2130,8 +2260,8 @@ function IngredientForm({
 }) {
   const isEdit = !!initial?.id;
   const [name, setName]                 = useState(initial?.name ?? "");
-  const [category, setCategory]         = useState<"comestible" | "plastico">(initial?.category ?? "comestible");
-  const [unit, setUnit]                 = useState(initial?.unit ?? "");
+  const [category, setCategory]         = useState<"comestible" | "plastico" | "helado">(initial?.category ?? "comestible");
+  const isHelado = category === "helado";
   const [minThreshold, setMinThreshold] = useState(String(initial?.minThreshold ?? "0"));
   const [stockQuantity, setStockQuantity] = useState(String(initial?.stockQuantity ?? "0"));
   const [active, setActive]             = useState(initial?.active ?? true);
@@ -2142,7 +2272,10 @@ function IngredientForm({
     setSaving(true);
     setError("");
     try {
-      const payload = { name, category, unit, minThreshold: Number(minThreshold ?? 0), stockQuantity: Number(stockQuantity ?? 0), active };
+      // Sin unidad de medida: la cantidad de cada ingrediente se define en la receta del producto.
+      // La columna sigue siendo obligatoria en la BD, así que al crear se guarda vacía
+      // (el backend la pone en "lb" si es helado).
+      const payload = { name, category, ...(isEdit ? {} : { unit: "" }), minThreshold: Number(minThreshold ?? 0), stockQuantity: Number(stockQuantity ?? 0), active };
       const saved = isEdit
         ? await api.updateIngredient(initial.id, payload)
         : await api.createIngredient(payload);
@@ -2195,6 +2328,7 @@ function IngredientForm({
           <div style={{ display: "flex", gap: ".6rem" }}>
             {([
               { value: "comestible", label: "🍓 Comestible", desc: "Ingredientes comestibles" },
+              { value: "helado",     label: "🍨 Helado",     desc: "Por libra — en recetas se usa en bolitas" },
               { value: "plastico",   label: "🛍️ Plástico",   desc: "Vasos, pitillos, tapas…" },
             ] as const).map((opt) => (
               <button
@@ -2215,25 +2349,19 @@ function IngredientForm({
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
-          <div>
-            <label style={{ fontSize: ".75rem", fontWeight: 600, color: "#6c757d", textTransform: "uppercase", letterSpacing: ".4px", display: "block", marginBottom: ".4rem" }}>Nombre *</label>
-            <input style={inp} value={name} placeholder="Ej. Leche, Azúcar, Fresas…" onChange={(e) => setName(e.target.value)} onFocus={focus} onBlur={blur} />
-          </div>
-          <div>
-            <label style={{ fontSize: ".75rem", fontWeight: 600, color: "#6c757d", textTransform: "uppercase", letterSpacing: ".4px", display: "block", marginBottom: ".4rem" }}>Unidad de medida *</label>
-            <input style={inp} value={unit} placeholder="Ej. oz, unidad, cucharada…" onChange={(e) => setUnit(e.target.value)} onFocus={focus} onBlur={blur} />
-          </div>
+        <div style={{ marginBottom: "1rem" }}>
+          <label style={{ fontSize: ".75rem", fontWeight: 600, color: "#6c757d", textTransform: "uppercase", letterSpacing: ".4px", display: "block", marginBottom: ".4rem" }}>Nombre *</label>
+          <input style={inp} value={name} placeholder="Ej. Leche, Azúcar, Fresas…" onChange={(e) => setName(e.target.value)} onFocus={focus} onBlur={blur} />
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: isEdit ? "1rem" : "0" }}>
           <div>
-            <label style={{ fontSize: ".75rem", fontWeight: 600, color: "#6c757d", textTransform: "uppercase", letterSpacing: ".4px", display: "block", marginBottom: ".4rem" }}>Stock mínimo</label>
-            <input type="number" style={inp} value={minThreshold} placeholder="0" min={0} onChange={(e) => setMinThreshold(e.target.value)} onFocus={focus} onBlur={blur} />
+            <label style={{ fontSize: ".75rem", fontWeight: 600, color: "#6c757d", textTransform: "uppercase", letterSpacing: ".4px", display: "block", marginBottom: ".4rem" }}>Stock mínimo{isHelado ? " (libras)" : ""}</label>
+            <input type="number" style={inp} value={minThreshold} placeholder="0" min={0} step="any" onChange={(e) => setMinThreshold(e.target.value)} onFocus={focus} onBlur={blur} />
           </div>
           <div>
-            <label style={{ fontSize: ".75rem", fontWeight: 600, color: "#6c757d", textTransform: "uppercase", letterSpacing: ".4px", display: "block", marginBottom: ".4rem" }}>Stock actual</label>
-            <input type="number" style={inp} value={stockQuantity} placeholder="0" min={0} onChange={(e) => setStockQuantity(e.target.value)} onFocus={focus} onBlur={blur} />
+            <label style={{ fontSize: ".75rem", fontWeight: 600, color: "#6c757d", textTransform: "uppercase", letterSpacing: ".4px", display: "block", marginBottom: ".4rem" }}>Stock actual{isHelado ? " (libras)" : ""}</label>
+            <input type="number" style={inp} value={stockQuantity} placeholder="0" min={0} step="any" onChange={(e) => setStockQuantity(e.target.value)} onFocus={focus} onBlur={blur} />
           </div>
         </div>
 
@@ -2259,8 +2387,8 @@ function IngredientForm({
         </button>
         <button
           onClick={handleSave}
-          disabled={saving || !name || !unit}
-          style={{ padding: ".65rem 2rem", background: saving || !name || !unit ? "#adb5bd" : "#ec0927", color: "#fff", border: "none", borderRadius: 10, cursor: saving || !name || !unit ? "not-allowed" : "pointer", fontWeight: 700, fontSize: ".9rem", fontFamily: "inherit" }}
+          disabled={saving || !name}
+          style={{ padding: ".65rem 2rem", background: saving || !name ? "#adb5bd" : "#ec0927", color: "#fff", border: "none", borderRadius: 10, cursor: saving || !name ? "not-allowed" : "pointer", fontWeight: 700, fontSize: ".9rem", fontFamily: "inherit" }}
         >
           {saving ? "Guardando…" : isEdit ? "✓ Guardar cambios" : "+ Crear ingrediente"}
         </button>
@@ -2275,12 +2403,12 @@ function IngredientsPanel() {
   const [view, setView]               = useState<"list" | "form">("list");
   const [editing, setEditing]         = useState<any | null>(null);
   const [page, setPage]               = useState(1);
-  const [filterTab, setFilterTab]     = useState<"all" | "comestible" | "plastico">("all");
+  const [filterTab, setFilterTab]     = useState<"all" | "comestible" | "plastico" | "helado">("all");
   const [confirmDel, setConfirmDel]   = useState<{ id: number; name: string } | null>(null);
   const [deleting, setDeleting]       = useState(false);
 
   // Restock state
-  const [restocking, setRestocking] = useState<{ id: number; name: string } | null>(null);
+  const [restocking, setRestocking] = useState<{ id: number; name: string; category?: string } | null>(null);
   const [qty, setQty]               = useState("");
   const [reason, setReason]         = useState("");
 
@@ -2295,7 +2423,7 @@ function IngredientsPanel() {
   const filtered = filterTab === "all" ? ingredients : ingredients.filter((i) => i.category === filterTab);
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  function changeTab(tab: "all" | "comestible" | "plastico") {
+  function changeTab(tab: "all" | "comestible" | "plastico" | "helado") {
     setFilterTab(tab);
     setPage(1);
   }
@@ -2340,7 +2468,7 @@ function IngredientsPanel() {
         ),
       );
       closeRestock();
-      setSuccess(`Se agregaron ${qty} unidades a "${restocking.name}" correctamente.`);
+      setSuccess(`Se agregaron ${qty} ${restocking.category === "helado" ? "libras" : "unidades"} a "${restocking.name}" correctamente.`);
     } catch (e: any) {
       setError(e.message ?? "Error al reabastecer");
     } finally {
@@ -2374,6 +2502,7 @@ function IngredientsPanel() {
         {([
           { key: "all",        label: "Todos",       emoji: "🔍", count: ingredients.length },
           { key: "comestible", label: "Comestibles", emoji: "🍓", count: ingredients.filter((i) => i.category === "comestible" || !i.category).length },
+          { key: "helado",     label: "Helados",     emoji: "🍨", count: ingredients.filter((i) => i.category === "helado").length },
           { key: "plastico",   label: "Plásticos",   emoji: "🛍️", count: ingredients.filter((i) => i.category === "plastico").length },
         ] as const).map((tab) => (
           <button
@@ -2425,7 +2554,7 @@ function IngredientsPanel() {
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".88rem" }}>
           <thead>
             <tr style={{ background: "#f8f9fa" }}>
-              {["#", "Nombre", "Tipo", "Stock actual", "Mínimo", "Unidad", "Estado", "Acciones"].map((h) => (
+              {["#", "Nombre", "Tipo", "Stock actual", "Mínimo", "Estado", "Acciones"].map((h) => (
                 <th key={h} style={{ padding: ".9rem 1.25rem", textAlign: "left", fontWeight: 600, color: "#6c757d", fontSize: ".8rem", textTransform: "uppercase", letterSpacing: ".4px" }}>{h}</th>
               ))}
             </tr>
@@ -2441,15 +2570,16 @@ function IngredientsPanel() {
                   <td style={{ padding: ".85rem 1.25rem" }}>
                     {i.category === "plastico" ? (
                       <span style={{ padding: ".22rem .65rem", borderRadius: 99, fontSize: ".72rem", fontWeight: 700, background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe" }}>🛍️ Plástico</span>
+                    ) : i.category === "helado" ? (
+                      <span style={{ padding: ".22rem .65rem", borderRadius: 99, fontSize: ".72rem", fontWeight: 700, background: "#fdf2f8", color: "#be185d", border: "1px solid #fbcfe8" }}>🍨 Helado</span>
                     ) : (
                       <span style={{ padding: ".22rem .65rem", borderRadius: 99, fontSize: ".72rem", fontWeight: 700, background: "#f0fdf4", color: "#15803d", border: "1px solid #bbf7d0" }}>🍓 Comestible</span>
                     )}
                   </td>
                   <td style={{ padding: ".85rem 1.25rem", fontWeight: 700, color: low && i.active ? "#c0071e" : "#28a745" }}>
-                    {Number(i.stockQuantity).toFixed(2)}
+                    {Number(i.stockQuantity).toFixed(2)}{i.category === "helado" ? " lb" : ""}
                   </td>
-                  <td style={{ padding: ".85rem 1.25rem", color: "#6c757d" }}>{Number(i.minThreshold).toFixed(2)}</td>
-                  <td style={{ padding: ".85rem 1.25rem", color: "#6c757d" }}>{i.unit}</td>
+                  <td style={{ padding: ".85rem 1.25rem", color: "#6c757d" }}>{Number(i.minThreshold).toFixed(2)}{i.category === "helado" ? " lb" : ""}</td>
                   <td style={{ padding: ".85rem 1.25rem" }}>
                     <span style={{ padding: ".3rem .8rem", borderRadius: 99, fontSize: ".78rem", fontWeight: 700, background: i.active ? "#d4edda" : "#f8d7da", color: i.active ? "#155724" : "#721c24" }}>
                       {i.active ? "● Activo" : "○ Inactivo"}
@@ -2458,7 +2588,7 @@ function IngredientsPanel() {
                   <td style={{ padding: ".85rem 1.25rem" }}>
                     <div style={{ display: "flex", gap: ".45rem", flexWrap: "wrap" }}>
                       <button onClick={() => { setEditing(i); setView("form"); }} style={ghostBtn}>Editar</button>
-                      <button onClick={() => setRestocking({ id: i.id, name: i.name })} style={primaryBtn}>+ Reabastecer</button>
+                      <button onClick={() => setRestocking({ id: i.id, name: i.name, category: i.category })} style={primaryBtn}>+ Reabastecer</button>
                       <button
                         onClick={() => setConfirmDel({ id: i.id, name: i.name })}
                         style={{ padding: ".3rem .75rem", border: "1.5px solid #fecaca", borderRadius: 8, background: "#fff5f5", cursor: "pointer", fontSize: ".78rem", fontFamily: "inherit", color: "#dc2626", fontWeight: 600 }}
@@ -2502,8 +2632,8 @@ function IngredientsPanel() {
 
       {/* ── Reabastecer ── */}
       <GlassDialog open={!!restocking} title={`Reabastecer: ${restocking?.name}`} onClose={closeRestock}>
-        <GlassField label="Cantidad a agregar">
-          <input type="number" className="g-inp" placeholder="Ej. 10" value={qty} min={0} onChange={(e) => setQty(e.target.value)} />
+        <GlassField label={restocking?.category === "helado" ? "Libras a agregar" : "Cantidad a agregar"}>
+          <input type="number" className="g-inp" placeholder="Ej. 10" value={qty} min={0} step="any" onChange={(e) => setQty(e.target.value)} />
         </GlassField>
         <GlassField label="Razón (opcional)">
           <input className="g-inp" placeholder="Reabastecimiento periódico..." value={reason} onChange={(e) => setReason(e.target.value)} />
@@ -2530,13 +2660,90 @@ function IngredientsPanel() {
 // ─── Inventory Panel (stock overview) ─────────────────────────────────────────
 function InventoryPanel() {
   const [items, setItems] = useState<any[]>([]);
+  const [paletas, setPaletas] = useState<any[]>([]);
 
   useEffect(() => {
     api.ingredients().then(setItems).catch(() => {});
+    api.products(true, "paleteria").then(setPaletas).catch(() => {});
   }, []);
+
+  const [view, setView] = useState<"all" | "ingredients" | "paletas">("all");
+  const showIng = view !== "paletas";
+  const showPal = view !== "ingredients";
+
+  // Agotadas primero para que se vean las que hay que reponer
+  const paletasSorted = [...paletas].sort((a, b) => Number(a.stockQuantity) - Number(b.stockQuantity) || a.name.localeCompare(b.name));
+  const palAgotadas = paletas.filter((p) => !(Number(p.stockQuantity) > 0));
 
   const low = items.filter((i) => i.active && Number(i.stockQuantity) <= Number(i.minThreshold));
   const ok  = items.filter((i) => i.active && Number(i.stockQuantity) >  Number(i.minThreshold));
+  const activeIng = items.filter((i) => i.active);
+
+  // Resumen según la vista: ingredientes con stock ≤ mínimo y paletas en 0 cuentan como "stock bajo"
+  const summary = {
+    total: (showIng ? activeIng.length : 0) + (showPal ? paletas.length : 0),
+    low:   (showIng ? low.length : 0) + (showPal ? palAgotadas.length : 0),
+    ok:    (showIng ? ok.length : 0) + (showPal ? paletas.length - palAgotadas.length : 0),
+  };
+
+  function printInventory() {
+    const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+    const now = new Date();
+    const fecha = `${now.toLocaleDateString("es-GT", { dateStyle: "long" })} — ${now.toLocaleTimeString("es-GT", { hour: "2-digit", minute: "2-digit" })}`;
+    const ingRows = [...activeIng]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((i) => {
+        const isLow = Number(i.stockQuantity) <= Number(i.minThreshold);
+        return `<tr class="${isLow ? "low" : ""}"><td>${esc(i.name)}</td><td class="num">${Number(i.stockQuantity).toFixed(2)} ${esc(i.unit)}</td><td class="num">${Number(i.minThreshold).toFixed(2)} ${esc(i.unit)}</td><td>${isLow ? "⚠ Bajo" : "OK"}</td></tr>`;
+      })
+      .join("");
+    const palRows = [...paletas]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((p) => {
+        const qty = Number(p.stockQuantity) || 0;
+        return `<tr class="${qty > 0 ? "" : "low"}"><td>${esc(p.name)}</td><td>${esc(p.category?.name)}</td><td class="num">${qty} u.</td><td>${qty > 0 ? "OK" : "⚠ Agotada"}</td></tr>`;
+      })
+      .join("");
+    const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/><title>Inventario Sarita</title>
+<style>
+  @page { margin: 14mm; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; font-size: 11pt; margin: 0; }
+  h1 { font-size: 18pt; margin: 0; color: #ec0927; }
+  .meta { color: #555; font-size: 9.5pt; margin: 2px 0 14px; }
+  h2 { font-size: 12pt; margin: 18px 0 6px; border-bottom: 2px solid #111; padding-bottom: 3px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 9pt; text-transform: uppercase; color: #555; border-bottom: 1px solid #999; padding: 5px 6px; }
+  td { padding: 5px 6px; border-bottom: 1px solid #ddd; }
+  td.num { text-align: right; white-space: nowrap; }
+  th.num { text-align: right; }
+  tr.low td { font-weight: 700; }
+  .empty { color: #888; font-style: italic; }
+  .sign { margin-top: 36px; display: flex; gap: 40px; font-size: 9.5pt; color: #555; }
+  .sign div { flex: 1; border-top: 1px solid #999; padding-top: 4px; }
+</style></head><body>
+  <h1>Sarita — Inventario</h1>
+  <div class="meta">${esc(fecha)}</div>
+  ${showIng ? `<h2>Ingredientes (${activeIng.length})</h2>
+  <table><thead><tr><th>Ingrediente</th><th class="num">Stock actual</th><th class="num">Mínimo</th><th>Estado</th></tr></thead>
+  <tbody>${ingRows || `<tr><td colspan="4" class="empty">No hay ingredientes activos</td></tr>`}</tbody></table>` : ""}
+  ${showPal ? `<h2>Paletería (${paletas.length}) — ${paletas.reduce((n, p) => n + (Number(p.stockQuantity) || 0), 0)} unidades</h2>
+  <table><thead><tr><th>Paleta</th><th>Categoría</th><th class="num">Existencia</th><th>Estado</th></tr></thead>
+  <tbody>${palRows || `<tr><td colspan="4" class="empty">No hay paletas activas</td></tr>`}</tbody></table>` : ""}
+  <div class="sign"><div>Revisado por</div><div>Firma</div></div>
+</body></html>`;
+    const iframe = document.createElement("iframe");
+    iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:none;";
+    document.body.appendChild(iframe);
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) { document.body.removeChild(iframe); return; }
+    doc.open(); doc.write(html); doc.close();
+    iframe.contentWindow?.focus();
+    setTimeout(() => {
+      iframe.contentWindow?.print();
+      setTimeout(() => document.body.removeChild(iframe), 1000);
+    }, 250);
+  }
 
   const row = (i: any) => {
     const diff = Number(i.stockQuantity) - Number(i.minThreshold);
@@ -2569,14 +2776,51 @@ function InventoryPanel() {
 
   return (
     <div style={{ maxWidth: 1000, margin: "0 auto", padding: "2rem 1.5rem", animation: "pageEnter .35s cubic-bezier(.4,0,.2,1)" }}>
-      <PageHeader title="Inventario" subtitle="Vista de niveles de stock por ingrediente" />
+      <PageHeader title="Inventario" subtitle="Vista de niveles de stock por ingrediente y existencia de paletas" />
+
+      {/* Vista + imprimir */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: ".75rem", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: ".45rem" }}>
+          {([
+            { key: "all",         label: "Todo",         emoji: "📦", count: activeIng.length + paletas.length },
+            { key: "ingredients", label: "Ingredientes", emoji: "🧪", count: activeIng.length },
+            { key: "paletas",     label: "Paletería",    emoji: "🍡", count: paletas.length },
+          ] as const).map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setView(tab.key)}
+              style={{
+                display: "flex", alignItems: "center", gap: ".4rem",
+                padding: ".45rem 1rem", borderRadius: 99, fontFamily: "inherit",
+                border: `1.5px solid ${view === tab.key ? "#ec0927" : "#e9ecef"}`,
+                background: view === tab.key ? "#fff0f2" : "#fff",
+                color: view === tab.key ? "#ec0927" : "#6c757d",
+                fontWeight: view === tab.key ? 700 : 500,
+                fontSize: ".82rem", cursor: "pointer", transition: "all .15s",
+              }}
+            >
+              <span>{tab.emoji}</span>
+              <span>{tab.label}</span>
+              <span style={{ padding: ".1rem .45rem", borderRadius: 99, background: view === tab.key ? "#ec0927" : "#f1f3f5", color: view === tab.key ? "#fff" : "#9ca3af", fontSize: ".7rem", fontWeight: 700 }}>
+                {tab.count}
+              </span>
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={printInventory}
+          style={{ display: "flex", alignItems: "center", gap: ".45rem", padding: ".55rem 1.1rem", border: "none", borderRadius: 10, background: "#ec0927", color: "#fff", cursor: "pointer", fontSize: ".85rem", fontWeight: 700, fontFamily: "inherit", boxShadow: "0 4px 14px rgba(236,9,39,.25)" }}
+        >
+          🖨 Imprimir inventario
+        </button>
+      </div>
 
       {/* Summary cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1rem", marginBottom: "1.75rem" }}>
         {[
-          { label: "Total activos", value: items.filter((i) => i.active).length, color: "#3b5bdb", bg: "#eff6ff" },
-          { label: "Stock bajo",    value: low.length,  color: "#c0071e", bg: "#fff5f5" },
-          { label: "Stock OK",      value: ok.length,   color: "#155724", bg: "#f0fdf4" },
+          { label: "Total activos", value: summary.total, color: "#3b5bdb", bg: "#eff6ff" },
+          { label: "Stock bajo",    value: summary.low,   color: "#c0071e", bg: "#fff5f5" },
+          { label: "Stock OK",      value: summary.ok,    color: "#155724", bg: "#f0fdf4" },
         ].map(({ label, value, color, bg }) => (
           <div key={label} style={{ background: bg, borderRadius: 14, padding: "1.1rem 1.4rem", border: `1px solid ${color}22` }}>
             <p style={{ margin: 0, fontSize: ".78rem", fontWeight: 600, color, textTransform: "uppercase", letterSpacing: ".5px" }}>{label}</p>
@@ -2586,7 +2830,7 @@ function InventoryPanel() {
       </div>
 
       {/* Low stock section */}
-      {low.length > 0 && (
+      {showIng && low.length > 0 && (
         <>
           <h3 style={{ fontSize: ".85rem", fontWeight: 700, color: "#c0071e", textTransform: "uppercase", letterSpacing: ".5px", margin: "0 0 .75rem" }}>⚠ Requieren reabastecimiento</h3>
           <div style={tableWrap}>
@@ -2599,7 +2843,7 @@ function InventoryPanel() {
       )}
 
       {/* OK section */}
-      {ok.length > 0 && (
+      {showIng && ok.length > 0 && (
         <>
           <h3 style={{ fontSize: ".85rem", fontWeight: 700, color: "#155724", textTransform: "uppercase", letterSpacing: ".5px", margin: "0 0 .75rem" }}>✓ Stock suficiente</h3>
           <div style={tableWrap}>
@@ -2611,9 +2855,47 @@ function InventoryPanel() {
         </>
       )}
 
-      {!items.length && (
+      {showIng && !items.length && (
         <p style={{ padding: "2rem", textAlign: "center", color: "#adb5bd" }}>No hay ingredientes registrados</p>
       )}
+
+      {/* Paletería: se vende por unidad, la existencia vive en el producto */}
+      {showPal && (<>
+      <h3 style={{ fontSize: ".85rem", fontWeight: 700, color: "#0369a1", textTransform: "uppercase", letterSpacing: ".5px", margin: "1rem 0 .75rem" }}>
+        🍡 Paletería — existencia · {paletas.reduce((n, p) => n + (Number(p.stockQuantity) || 0), 0)} unidades
+      </h3>
+      <div style={tableWrap}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".88rem" }}>
+          <thead>
+            <tr style={{ background: "#f8f9fa" }}>
+              {["Paleta", "Categoría", "Existencia", "Estado"].map((h) => (
+                <th key={h} style={{ padding: ".9rem 1.25rem", textAlign: "left", fontWeight: 600, color: "#6c757d", fontSize: ".8rem", textTransform: "uppercase", letterSpacing: ".4px" }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {paletasSorted.map((p) => {
+              const qty = Number(p.stockQuantity) || 0;
+              return (
+                <tr key={p.id} style={{ borderTop: "1px solid #f1f3f5" }}>
+                  <td style={{ padding: ".85rem 1.25rem", fontWeight: 600, color: "#111" }}>{p.name}</td>
+                  <td style={{ padding: ".85rem 1.25rem", color: "#6c757d" }}>{p.category?.name}</td>
+                  <td style={{ padding: ".85rem 1.25rem", fontWeight: 700, color: qty > 0 ? "#28a745" : "#c0071e" }}>{qty} u.</td>
+                  <td style={{ padding: ".85rem 1.25rem" }}>
+                    <span style={{ padding: ".25rem .6rem", borderRadius: 99, fontSize: ".75rem", fontWeight: 700, background: qty > 0 ? "#d4edda" : "#f8d7da", color: qty > 0 ? "#155724" : "#721c24" }}>
+                      {qty > 0 ? "✓ Disponible" : "⚠ Agotada"}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+            {!paletas.length && (
+              <tr><td colSpan={4} style={{ padding: "2rem", textAlign: "center", color: "#adb5bd" }}>No hay paletas activas</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      </>)}
     </div>
   );
 }

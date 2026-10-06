@@ -63,7 +63,17 @@ export class OrdersService {
     // Build aggregated requirements and validate stock before any deduction
     const required = new Map<number, number>();
     const piByItem: { item: OrderItem; pis: { ingredient: any; totalUsed: number }[] }[] = [];
+    // Las paletas no tienen receta: descuentan de su propio stock por unidad
+    const palRequired = new Map<number, number>();
     for (const item of order.items) {
+      if (item.product.line === 'paleteria') {
+        palRequired.set(item.product.id, (palRequired.get(item.product.id) ?? 0) + item.quantity);
+      }
+      // Paletas que forman parte de la receta (si la paleta fue eliminada, component llega null)
+      for (const pc of await this.productsService.getProductComponents(item.product.id)) {
+        if (!pc.component) continue;
+        palRequired.set(pc.component.id, (palRequired.get(pc.component.id) ?? 0) + pc.quantity * item.quantity);
+      }
       const productIngredients = await this.productsService.getProductIngredients(item.product.id);
       const pis = productIngredients.map((pi) => ({
         ingredient: pi.ingredient,
@@ -77,8 +87,14 @@ export class OrdersService {
     await this.ingredientsService.checkStock(
       Array.from(required.entries()).map(([ingredientId, needed]) => ({ ingredientId, needed })),
     );
+    await this.productsService.checkStock(
+      Array.from(palRequired.entries()).map(([productId, needed]) => ({ productId, needed })),
+    );
 
     const reason = `Venta #${orderId}`;
+    for (const [productId, quantity] of palRequired) {
+      await this.productsService.deductStock(productId, quantity);
+    }
     for (const { item, pis } of piByItem) {
       for (const { ingredient, totalUsed } of pis) {
         await this.ingredientsService.deductStock(ingredient.id, totalUsed, reason);

@@ -20,7 +20,7 @@ export class InventoryMovement {
   @Column({ type: 'enum', enum: MovementType })
   type: MovementType;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2 })
+  @Column({ type: 'decimal', precision: 14, scale: 5 })
   quantity: number;
 
   @Column({ nullable: true })

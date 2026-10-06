@@ -35,6 +35,7 @@ export class IngredientsService {
       const exists = await this.repo.findOne({ where: { name: data.name } });
       if (exists) throw new ConflictException(`Ya existe un ingrediente con el nombre "${data.name}"`);
     }
+    if (data.category === 'helado') data.unit = 'lb';
     return this.repo.save(this.repo.create(data));
   }
 
@@ -44,6 +45,9 @@ export class IngredientsService {
       const exists = await this.repo.findOne({ where: { name: data.name, id: Not(id) } });
       if (exists) throw new ConflictException(`Ya existe un ingrediente con el nombre "${data.name}"`);
     }
+    // El helado se inventaría en libras; al dejar de ser helado se quita esa unidad
+    if (data.category === 'helado') data.unit = 'lb';
+    else if (data.category && entity.category === 'helado') data.unit = '';
     Object.assign(entity, data);
     return this.repo.save(entity);
   }

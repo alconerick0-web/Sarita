@@ -22,6 +22,7 @@ import { InventoryMovement } from './ingredients/entities/inventory-movement.ent
 import { Product } from './products/entities/product.entity';
 import { ProductStep } from './products/entities/product-step.entity';
 import { ProductIngredient } from './products/entities/product-ingredient.entity';
+import { ProductComponent } from './products/entities/product-component.entity';
 import { Order } from './orders/entities/order.entity';
 import { OrderItem } from './orders/entities/order-item.entity';
 import { OrderItemUsed } from './orders/entities/order-item-used.entity';
@@ -42,7 +43,7 @@ import { Invoice } from './invoices/entities/invoice.entity';
         password: config.get('POSTGRES_PASSWORD', 'sarita_pass'),
         entities: [
           Role, User, Category, Flavor, Ingredient, InventoryMovement,
-          Product, ProductStep, ProductIngredient,
+          Product, ProductStep, ProductIngredient, ProductComponent,
           Order, OrderItem, OrderItemUsed, Invoice,
         ],
         synchronize: config.get('NODE_ENV') !== 'production',

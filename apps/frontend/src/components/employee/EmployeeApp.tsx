@@ -3,7 +3,7 @@ import { api } from '../../lib/api';
 import { ErrorModal, ConfirmModal, GlassDialog } from '../ui/Modal';
 
 type ProductStep = { id: number; stepNumber: number; description: string; requiresFlavor: boolean; flavorCount: number };
-type Product  = { id: number; name: string; price: number; containerSize: string; active: boolean; steps: ProductStep[] };
+type Product  = { id: number; name: string; price: number; containerSize: string; active: boolean; line?: string; stockQuantity?: number; steps: ProductStep[] };
 type Category = { id: number; name: string; icon: string; line?: string; products: Product[] };
 type Flavor   = { id: number; name: string; color: string };
 type FlavorSel = { flavorId?: number; flavorName?: string };
@@ -767,6 +767,8 @@ export default function EmployeeApp({ userName }: { userName: string }) {
       setCart([]);
       setOrderId(null);
       loadSales();
+      // Refresca el stock de paletas mostrado en las tarjetas
+      api.categories().then((cats) => setCategories(cats as Category[])).catch(() => {});
       printOrderReceipt(order, itemsSnapshot);
     } catch (e: any) {
       setAppError(e.message ?? 'Error al completar la orden');
@@ -903,17 +905,25 @@ export default function EmployeeApp({ userName }: { userName: string }) {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: '.85rem' }}>
-            {activeProducts.map((product) => (
+            {activeProducts.map((product) => {
+              const isPal = product.line === 'paleteria';
+              // Resta lo que ya está en el carrito para no ofrecer más de lo disponible
+              const inCart = cart.filter((i) => i.product.id === product.id).reduce((n, i) => n + i.quantity, 0);
+              const available = isPal ? Math.max(0, Number(product.stockQuantity ?? 0) - inCart) : null;
+              const soldOut = available === 0;
+              return (
               <button
                 key={product.id}
-                onClick={() => setPicker(product)}
+                onClick={() => { if (!soldOut) setPicker(product); }}
+                disabled={soldOut}
                 style={{
                   background: '#fff', border: '1.5px solid #e9ecef', borderRadius: 14,
-                  padding: '1.1rem', cursor: 'pointer', textAlign: 'left',
+                  padding: '1.1rem', cursor: soldOut ? 'not-allowed' : 'pointer', textAlign: 'left',
+                  opacity: soldOut ? .5 : 1,
                   transition: 'transform .15s, box-shadow .15s, border-color .15s',
                   fontFamily: 'inherit', display: 'flex', flexDirection: 'column',
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(236,9,39,.14)'; e.currentTarget.style.borderColor = '#ec0927'; }}
+                onMouseEnter={(e) => { if (soldOut) return; e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(236,9,39,.14)'; e.currentTarget.style.borderColor = '#ec0927'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.borderColor = '#e9ecef'; }}
               >
                 <div style={{ fontSize: '2rem', marginBottom: '.6rem' }}>🍦</div>
@@ -921,12 +931,20 @@ export default function EmployeeApp({ userName }: { userName: string }) {
                 {product.containerSize && (
                   <p style={{ fontSize: '.75rem', color: '#adb5bd', marginBottom: '.65rem' }}>{product.containerSize}</p>
                 )}
+                {available !== null && (
+                  <p style={{ fontSize: '.75rem', fontWeight: 700, color: soldOut ? '#dc2626' : '#0369a1', marginBottom: '.65rem' }}>
+                    {soldOut ? 'Agotado' : `Stock: ${available}`}
+                  </p>
+                )}
                 <div style={{ marginTop: 'auto', display: 'flex', flexWrap: 'wrap', gap: '.4rem', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: '1.05rem', fontWeight: 900, color: '#ec0927', letterSpacing: '-.3px' }}>Q{Number(product.price).toFixed(2)}</span>
-                  <span style={{ background: '#fff0f2', color: '#ec0927', fontSize: '.72rem', fontWeight: 700, padding: '.2rem .6rem', borderRadius: 99 }}>+ Agregar</span>
+                  {!soldOut && (
+                    <span style={{ background: '#fff0f2', color: '#ec0927', fontSize: '.72rem', fontWeight: 700, padding: '.2rem .6rem', borderRadius: 99 }}>+ Agregar</span>
+                  )}
                 </div>
               </button>
-            ))}
+              );
+            })}
             {activeProducts.length === 0 && (
               <div style={{ gridColumn: '1/-1', textAlign: 'center', paddingTop: '3rem', color: '#b0b8c4' }}>
                 <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🍽️</div>
