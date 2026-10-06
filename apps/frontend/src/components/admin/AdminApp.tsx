@@ -1439,9 +1439,12 @@ function CategoriesPanel({ line = "heladeria" }: { line?: string }) {
 }
 
 // ─── Product Form ─────────────────────────────────────────────────────────────
-// Para helado la cantidad se escribe como bolitas × onzas por bolita (el backend lo pasa a libras)
-type IngRow = { ingredientId: number | ""; quantity: number | ""; scoops: number | ""; ounces: number | "" };
+// Una fila de la receta es un ingrediente ("i:<id>") o una paleta ("p:<id>"); se guardan por
+// separado (ingredients / components) pero se arman en la misma lista.
+// Para helado la cantidad se escribe como bolitas × onzas por bolita (el backend lo pasa a libras).
+type IngRow = { ref: string; quantity: number | ""; scoops: number | ""; ounces: number | "" };
 const OZ_PER_LB = 16;
+const refId = (ref: string) => Number(ref.slice(2));
 
 function ProductForm({
   initial,
@@ -1466,8 +1469,6 @@ function ProductForm({
   const [categoryId, setCategoryId] = useState<number | "">("");
   const [active, setActive] = useState(true);
   const [ingRows, setIngRows] = useState<IngRow[]>([]);
-  // Paletas usadas como parte de la receta (se descuentan de su stock al vender)
-  const [compRows, setCompRows] = useState<{ componentId: number | ""; quantity: number | "" }[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [allIngredients, setAllIngredients] = useState<any[]>([]);
   const [allPaletas, setAllPaletas] = useState<any[]>([]);
@@ -1489,26 +1490,25 @@ function ProductForm({
         setStockQuantity(String(p.stockQuantity ?? ""));
         setCategoryId(p.category?.id ?? "");
         setActive(p.active ?? true);
-        setIngRows(
-          (p.productIngredients ?? []).map((pi: any) => ({
-            ingredientId: pi.ingredient?.id ?? "",
+        setIngRows([
+          ...(p.productIngredients ?? []).map((pi: any) => ({
+            ref: pi.ingredient?.id ? `i:${pi.ingredient.id}` : "",
             quantity: Number(pi.quantityPerUnit) || "",
             scoops: Number(pi.scoops) || "",
             ounces: Number(pi.ouncesPerScoop) || "",
           })),
-        );
-        setCompRows(
-          (p.components ?? [])
+          // Paletas de la receta (si la paleta fue eliminada, component llega null)
+          ...(p.components ?? [])
             .filter((pc: any) => pc.component)
-            .map((pc: any) => ({ componentId: pc.component.id, quantity: Number(pc.quantity) || "" })),
-        );
+            .map((pc: any) => ({ ref: `p:${pc.component.id}`, quantity: Number(pc.quantity) || "", scoops: "", ounces: "" })),
+        ] as IngRow[]);
         setLoaded(true);
       }).catch(() => setLoaded(true));
     }
   }, []);
 
   function addIngredient() {
-    setIngRows((r) => [...r, { ingredientId: "", quantity: "", scoops: "", ounces: "" }]);
+    setIngRows((r) => [...r, { ref: "", quantity: "", scoops: "", ounces: "" }]);
   }
 
   function removeIngredient(idx: number) {
@@ -1534,16 +1534,16 @@ function ProductForm({
         active,
         ...(isPal ? { stockQuantity: Math.max(0, Math.floor(Number(stockQuantity) || 0)) } : {}),
         ingredients: ingRows
-          .filter(rowComplete)
+          .filter((r) => rowComplete(r) && !isPaletaRow(r))
           .map((r) =>
             isHeladoRow(r)
-              ? { ingredientId: Number(r.ingredientId), scoops: Number(r.scoops), ouncesPerScoop: Number(r.ounces) }
-              : { ingredientId: Number(r.ingredientId), quantityPerUnit: Number(r.quantity) },
+              ? { ingredientId: refId(r.ref), scoops: Number(r.scoops), ouncesPerScoop: Number(r.ounces) }
+              : { ingredientId: refId(r.ref), quantityPerUnit: Number(r.quantity) },
           ),
         ...(isPal ? {} : {
-          components: compRows
-            .filter((c) => c.componentId !== "" && Number(c.quantity) > 0)
-            .map((c) => ({ componentId: Number(c.componentId), quantity: Math.floor(Number(c.quantity)) })),
+          components: ingRows
+            .filter((r) => rowComplete(r) && isPaletaRow(r))
+            .map((r) => ({ componentId: refId(r.ref), quantity: Math.floor(Number(r.quantity)) })),
         }),
       };
       const saved = isEdit
@@ -1567,16 +1567,33 @@ function ProductForm({
   const blur  = (e: React.FocusEvent<any>)                 => { e.currentTarget.style.borderColor = "#e9ecef"; };
 
   const ingMap = new Map(allIngredients.map((i) => [i.id, i]));
+  const palMap = new Map(allPaletas.map((p) => [p.id, p]));
 
+  // Un solo listado para elegir: ingredientes y, en heladería, también paletas
+  const recipeOptions = [
+    ...allIngredients.map((i) => ({
+      value: `i:${i.id}`,
+      label: i.name,
+      description: i.category === "helado" ? "🍨 Helado (lb)" : i.category === "plastico" ? "🛍️ Plástico" : "🍓 Ingrediente",
+    })),
+    ...allPaletas.map((p) => ({ value: `p:${p.id}`, label: p.name, description: `🍡 Paletería · stock ${Number(p.stockQuantity) || 0}` })),
+  ];
+
+  function isPaletaRow(r: IngRow) {
+    return r.ref.startsWith("p:");
+  }
   function isHeladoRow(r: IngRow) {
-    return ingMap.get(Number(r.ingredientId))?.category === "helado";
+    return r.ref.startsWith("i:") && ingMap.get(refId(r.ref))?.category === "helado";
   }
   function rowComplete(r: IngRow) {
-    if (r.ingredientId === "") return false;
-    return isHeladoRow(r) ? Number(r.scoops) > 0 && Number(r.ounces) > 0 : r.quantity !== "";
+    if (!r.ref) return false;
+    if (isHeladoRow(r)) return Number(r.scoops) > 0 && Number(r.ounces) > 0;
+    if (isPaletaRow(r)) return Number(r.quantity) >= 1;
+    return r.quantity !== "";
   }
   function rowLabel(r: IngRow) {
-    const name = ingMap.get(Number(r.ingredientId))?.name ?? "";
+    const name = (isPaletaRow(r) ? palMap : ingMap).get(refId(r.ref))?.name ?? "";
+    if (isPaletaRow(r)) return `${Math.floor(Number(r.quantity))} 🍡 ${name}`;
     if (!isHeladoRow(r)) return `${r.quantity} de ${name}`;
     const oz = Number(r.scoops) * Number(r.ounces);
     return `${r.scoops} bolita${Number(r.scoops) !== 1 ? "s" : ""} de ${r.ounces} oz de ${name} (${oz} oz = ${(oz / OZ_PER_LB).toFixed(3)} lb)`;
@@ -1666,7 +1683,7 @@ function ProductForm({
                   Receta — ¿Qué lleva este producto?
                 </p>
                 <p style={{ fontSize: ".78rem", color: "#b0b8c4", marginTop: ".25rem" }}>
-                  Selecciona cada ingrediente del inventario y define la cantidad que se usa por unidad vendida
+                  Selecciona ingredientes o paletas del inventario y define la cantidad que se usa por unidad vendida
                 </p>
               </div>
               <button
@@ -1712,9 +1729,9 @@ function ProductForm({
                 <div key={idx} style={{ display: "grid", gridTemplateColumns: "1fr 230px 32px", gap: ".6rem", alignItems: "center", marginBottom: ".45rem" }}>
                   {/* Ingredient selector */}
                   <Combobox
-                    value={row.ingredientId ?? ""}
-                    onChange={(v) => updateIngredient(idx, { ingredientId: v === "" ? "" : Number(v) })}
-                    options={allIngredients.map((i) => ({ value: i.id, label: i.name }))}
+                    value={row.ref}
+                    onChange={(v) => updateIngredient(idx, { ref: String(v) })}
+                    options={recipeOptions}
                     placeholder="— Seleccionar —"
                     accent="#0ea5e9"
                   />
@@ -1726,6 +1743,11 @@ function ProductForm({
                       <span style={{ fontSize: ".72rem", color: "#94a3b8", fontWeight: 600 }}>×</span>
                       {numInput(row.ounces, (v) => updateIngredient(idx, { ounces: v }), "Oz", "0.5")}
                       <span style={{ fontSize: ".72rem", color: "#94a3b8", fontWeight: 600 }}>oz</span>
+                    </div>
+                  ) : isPaletaRow(row) ? (
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: ".3rem", alignItems: "center" }}>
+                      {numInput(row.quantity, (v) => updateIngredient(idx, { quantity: v }), "1", "1")}
+                      <span style={{ fontSize: ".72rem", color: "#94a3b8", fontWeight: 600 }}>🍡 u.</span>
                     </div>
                   ) : (
                     numInput(row.quantity, (v) => updateIngredient(idx, { quantity: v }), "0", "0.5")
@@ -1751,68 +1773,6 @@ function ProductForm({
                 {ingRows.filter(rowComplete).map(rowLabel).join(", ")}
               </div>
             )}
-          </div>
-          )}
-
-          {/* ── Paletas en la receta ── */}
-          {!isPal && (
-          <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #e9ecef", padding: "1.5rem", marginBottom: "1rem" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
-              <div>
-                <p style={{ fontSize: ".68rem", fontWeight: 700, color: "#adb5bd", textTransform: "uppercase", letterSpacing: "1.2px", display: "flex", alignItems: "center", gap: ".5rem" }}>
-                  <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "#a855f7" }} />
-                  Paletas en la receta
-                </p>
-                <p style={{ fontSize: ".78rem", color: "#b0b8c4", marginTop: ".25rem" }}>
-                  Si este producto lleva paletas, agrégalas aquí — se descuentan de su stock en cada venta
-                </p>
-              </div>
-              <button
-                onClick={() => setCompRows((r) => [...r, { componentId: "", quantity: 1 }])}
-                style={{ padding: ".38rem .9rem", border: "1.5px solid #a855f7", borderRadius: 8, background: "#faf5ff", color: "#a855f7", cursor: "pointer", fontSize: ".78rem", fontWeight: 700, fontFamily: "inherit", flexShrink: 0 }}
-              >
-                + Agregar paleta
-              </button>
-            </div>
-
-            {compRows.length === 0 && (
-              <p style={{ textAlign: "center", padding: "1rem 0", color: "#b0b8c4", fontSize: ".85rem" }}>Esta receta no lleva paletas</p>
-            )}
-
-            {compRows.map((row, idx) => {
-              const pal = allPaletas.find((p) => p.id === Number(row.componentId));
-              return (
-                <div key={idx} style={{ display: "grid", gridTemplateColumns: "1fr 110px 32px", gap: ".6rem", alignItems: "center", marginBottom: ".45rem" }}>
-                  <Combobox
-                    value={row.componentId ?? ""}
-                    onChange={(v) => setCompRows((r) => r.map((c, i) => (i === idx ? { ...c, componentId: v === "" ? "" : Number(v) } : c)))}
-                    options={allPaletas.map((p) => ({ value: p.id, label: p.name, description: `Stock: ${Number(p.stockQuantity) || 0}` }))}
-                    placeholder="— Seleccionar paleta —"
-                    accent="#a855f7"
-                  />
-                  <input
-                    type="number"
-                    value={row.quantity ?? ""}
-                    onChange={(e) => setCompRows((r) => r.map((c, i) => (i === idx ? { ...c, quantity: e.target.value === "" ? "" : Number(e.target.value) } : c)))}
-                    style={{ ...inp, padding: ".55rem .65rem", textAlign: "right" }}
-                    placeholder="1"
-                    min={1}
-                    step="1"
-                    title={pal ? `Stock actual: ${Number(pal.stockQuantity) || 0}` : undefined}
-                    onFocus={(e) => focus(e, "#a855f7")}
-                    onBlur={blur}
-                  />
-                  <button
-                    onClick={() => setCompRows((r) => r.filter((_, i) => i !== idx))}
-                    style={{ background: "none", border: "none", color: "#dee2e6", cursor: "pointer", fontSize: "1.3rem", lineHeight: 1, padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
-                    onMouseEnter={(e) => { e.currentTarget.style.color = "#ec0927"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.color = "#dee2e6"; }}
-                  >
-                    ×
-                  </button>
-                </div>
-              );
-            })}
           </div>
           )}
 
