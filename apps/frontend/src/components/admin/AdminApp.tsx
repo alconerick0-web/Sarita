@@ -953,6 +953,55 @@ function Dashboard() {
           ))}
         </div>
 
+        {/* ── Ventas últimos 6 días ── */}
+        {(() => {
+          const days6: { label: string; date: string; revenue: number; orders: number }[] = [];
+          for (let i = 5; i >= 0; i--) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            const iso = d.toISOString().slice(0, 10);
+            const label = i === 0 ? "Hoy" : d.toLocaleDateString("es-GT", { weekday: "short", day: "numeric" });
+            const match = (monthRev?.byDay ?? []).find((r: any) => r.date === iso);
+            days6.push({ label, date: iso, revenue: Number(match?.revenue ?? 0), orders: Number(match?.orders ?? 0) });
+          }
+          const maxRev = Math.max(...days6.map((d) => d.revenue), 1);
+          return (
+            <div style={{ ...card, padding: "1.1rem 1.25rem", marginBottom: ".9rem" }}>
+              {sectionLabel("Ventas de los últimos 6 días", "#ec0927")}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: ".65rem", alignItems: "flex-end", minHeight: 110 }}>
+                {days6.map((d) => {
+                  const pct = maxRev > 0 ? (d.revenue / maxRev) * 100 : 0;
+                  const barH = Math.max(pct * 0.75, d.revenue > 0 ? 6 : 2);
+                  const isToday = d.date === new Date().toISOString().slice(0, 10);
+                  return (
+                    <div key={d.date} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: ".35rem" }}>
+                      <span style={{ fontSize: ".72rem", fontWeight: 700, color: d.revenue > 0 ? "#ec0927" : "#d1d5db" }}>
+                        {d.revenue > 0 ? `Q${Number(d.revenue).toFixed(0)}` : "—"}
+                      </span>
+                      <div style={{ width: "100%", height: 75, display: "flex", alignItems: "flex-end" }}>
+                        <div
+                          style={{
+                            width: "100%", height: `${barH}%`, minHeight: d.revenue > 0 ? 6 : 2,
+                            borderRadius: "6px 6px 0 0",
+                            background: isToday
+                              ? "linear-gradient(180deg, #ec0927, #7a0000)"
+                              : d.revenue > 0 ? "linear-gradient(180deg, #fca5a5, #f87171)" : "#f1f3f5",
+                            transition: "height .5s ease",
+                          }}
+                        />
+                      </div>
+                      <div style={{ textAlign: "center" }}>
+                        <p style={{ fontSize: ".7rem", fontWeight: isToday ? 800 : 600, color: isToday ? "#ec0927" : "#6c757d", margin: 0, textTransform: "capitalize" }}>{d.label}</p>
+                        {d.orders > 0 && <p style={{ fontSize: ".62rem", color: "#b0b8c4", margin: 0 }}>{d.orders} ped.</p>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* ── Fila principal ── */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: ".9rem", marginBottom: ".9rem" }}>
 
@@ -1813,6 +1862,11 @@ function ProductsPanel({ line = "heladeria" }: { line?: string }) {
   const [confirmDel, setConfirmDel] = useState<{ id: number; name: string } | null>(null);
   const [deleting, setDeleting]     = useState(false);
 
+  // Restock modal
+  const [restockProduct, setRestockProduct] = useState<{ id: number; name: string; current: number } | null>(null);
+  const [restockQty, setRestockQty]         = useState("");
+  const [restocking, setRestocking]         = useState(false);
+
   // Export modal
   const [showExportModal, setShowExportModal]   = useState(false);
   const [exportFilter, setExportFilter]         = useState<"all" | "category">("all");
@@ -1868,6 +1922,22 @@ function ProductsPanel({ line = "heladeria" }: { line?: string }) {
       setConfirmDel(null);
     } finally {
       setDeleting(false);
+    }
+  }
+
+  async function handleRestock() {
+    if (!restockProduct) return;
+    const qty = Math.max(0, Math.floor(Number(restockQty) || 0));
+    setRestocking(true);
+    try {
+      const updated = await api.updateProduct(restockProduct.id, { stockQuantity: qty }) as any;
+      setProducts((prev) => prev.map((x) => (x.id === restockProduct.id ? { ...x, stockQuantity: updated.stockQuantity ?? qty } : x)));
+      setRestockProduct(null);
+      setRestockQty("");
+    } catch (e: any) {
+      alert(e.message ?? "Error al actualizar el stock");
+    } finally {
+      setRestocking(false);
     }
   }
 
@@ -2018,13 +2088,23 @@ function ProductsPanel({ line = "heladeria" }: { line?: string }) {
                       </span>
                     </td>
                     <td style={{ padding: ".85rem 1.25rem" }}>
-                      <div style={{ display: "flex", gap: ".45rem" }}>
+                      <div style={{ display: "flex", gap: ".45rem", flexWrap: "wrap" }}>
                         {!isPal && (
                         <button
                           onClick={() => setExpandedId(expandedId === p.id ? null : p.id)}
                           style={{ padding: ".3rem .7rem", border: `1.5px solid ${expandedId === p.id ? "#7dd3fc" : "#bae6fd"}`, borderRadius: 8, background: expandedId === p.id ? "#e0f2fe" : "#f0f9ff", cursor: "pointer", fontSize: ".75rem", fontFamily: "inherit", color: "#0369a1", fontWeight: 600, transition: "all .15s" }}
                         >
                           {expandedId === p.id ? "▲" : "▼"} Receta
+                        </button>
+                        )}
+                        {isPal && (
+                        <button
+                          onClick={() => { setRestockProduct({ id: p.id, name: p.name, current: Number(p.stockQuantity) || 0 }); setRestockQty(String(Number(p.stockQuantity) || 0)); }}
+                          style={{ padding: ".3rem .75rem", border: "1.5px solid #a7f3d0", borderRadius: 8, background: "#ecfdf5", cursor: "pointer", fontSize: ".78rem", fontFamily: "inherit", color: "#065f46", fontWeight: 700 }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = "#d1fae5"; e.currentTarget.style.borderColor = "#6ee7b7"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = "#ecfdf5"; e.currentTarget.style.borderColor = "#a7f3d0"; }}
+                        >
+                          + Restablecer
                         </button>
                         )}
                         <button
@@ -2107,6 +2187,52 @@ function ProductsPanel({ line = "heladeria" }: { line?: string }) {
               <button onClick={() => setConfirmDel(null)} style={{ padding: ".6rem 1.5rem", border: "1.5px solid #e9ecef", borderRadius: 10, background: "#fff", cursor: "pointer", fontSize: ".9rem", fontFamily: "inherit", color: "#6c757d" }}>Cancelar</button>
               <button onClick={handleDelete} disabled={deleting} style={{ padding: ".6rem 1.5rem", background: deleting ? "#adb5bd" : "#dc2626", color: "#fff", border: "none", borderRadius: 10, cursor: deleting ? "not-allowed" : "pointer", fontWeight: 700, fontSize: ".9rem", fontFamily: "inherit" }}>
                 {deleting ? "Desactivando…" : "Sí, eliminar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal Restablecer Stock ── */}
+      {restockProduct && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "1rem" }}
+          onClick={(e) => { if (e.target === e.currentTarget) { setRestockProduct(null); setRestockQty(""); } }}
+        >
+          <div style={{ background: "#fff", borderRadius: 20, padding: "2rem", width: "100%", maxWidth: 420, boxShadow: "0 24px 64px rgba(0,0,0,.18)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: ".75rem", marginBottom: "1.25rem" }}>
+              <div style={{ width: 48, height: 48, borderRadius: 14, background: "#ecfdf5", border: "1.5px solid #a7f3d0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.4rem" }}>🍡</div>
+              <div>
+                <h2 style={{ fontSize: "1.1rem", fontWeight: 800, color: "#111", margin: 0 }}>Restablecer stock</h2>
+                <p style={{ fontSize: ".8rem", color: "#6c757d", marginTop: ".1rem" }}>{restockProduct.name}</p>
+              </div>
+            </div>
+            <p style={{ fontSize: ".85rem", color: "#6c757d", marginBottom: "1rem", lineHeight: 1.5 }}>
+              Stock actual: <strong style={{ color: "#0369a1" }}>{restockProduct.current} u.</strong> — Ingresá la nueva cantidad total de unidades disponibles.
+            </p>
+            <input
+              type="number"
+              min={0}
+              value={restockQty}
+              onChange={(e) => setRestockQty(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleRestock(); }}
+              style={{ width: "100%", padding: ".75rem 1rem", border: "1.5px solid #d1d5db", borderRadius: 10, fontSize: "1rem", fontFamily: "inherit", boxSizing: "border-box", marginBottom: "1.25rem", outline: "none" }}
+              autoFocus
+              placeholder="Ej: 50"
+            />
+            <div style={{ display: "flex", gap: ".75rem", justifyContent: "flex-end" }}>
+              <button
+                onClick={() => { setRestockProduct(null); setRestockQty(""); }}
+                style={{ padding: ".6rem 1.5rem", border: "1.5px solid #e9ecef", borderRadius: 10, background: "#fff", cursor: "pointer", fontSize: ".9rem", fontFamily: "inherit", color: "#6c757d" }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleRestock}
+                disabled={restocking}
+                style={{ padding: ".6rem 1.5rem", background: restocking ? "#adb5bd" : "linear-gradient(135deg, #10b981, #065f46)", color: "#fff", border: "none", borderRadius: 10, cursor: restocking ? "not-allowed" : "pointer", fontWeight: 700, fontSize: ".9rem", fontFamily: "inherit" }}
+              >
+                {restocking ? "Guardando…" : "Actualizar stock"}
               </button>
             </div>
           </div>
