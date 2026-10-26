@@ -2494,9 +2494,8 @@ function IngredientsPanel() {
   const [deleting, setDeleting]       = useState(false);
 
   // Restock state
-  const [restocking, setRestocking] = useState<{ id: number; name: string; category?: string } | null>(null);
+  const [restocking, setRestocking] = useState<{ id: number; name: string; current: number; unit?: string } | null>(null);
   const [qty, setQty]               = useState("");
-  const [reason, setReason]         = useState("");
 
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState("");
@@ -2538,25 +2537,21 @@ function IngredientsPanel() {
   function closeRestock() {
     setRestocking(null);
     setQty("");
-    setReason("");
   }
 
   async function handleRestock() {
-    if (!restocking || !qty) return;
+    if (!restocking) return;
+    const newQty = Math.max(0, Number(qty) || 0);
     setSaving(true);
     try {
-      await api.restock(restocking.id, Number(qty), reason || "Reabastecimiento");
+      await api.updateIngredient(restocking.id, { stockQuantity: newQty });
       setIngredients((prev) =>
-        prev.map((i) =>
-          i.id === restocking.id
-            ? { ...i, stockQuantity: Number(i.stockQuantity) + Number(qty) }
-            : i,
-        ),
+        prev.map((i) => (i.id === restocking.id ? { ...i, stockQuantity: newQty } : i)),
       );
       closeRestock();
-      setSuccess(`Se agregaron ${qty} ${restocking.category === "helado" ? "libras" : "unidades"} a "${restocking.name}" correctamente.`);
+      setSuccess(`Stock de "${restocking.name}" actualizado a ${newQty} ${restocking.unit ?? "u."} correctamente.`);
     } catch (e: any) {
-      setError(e.message ?? "Error al reabastecer");
+      setError(e.message ?? "Error al actualizar el stock");
     } finally {
       setSaving(false);
     }
@@ -2674,7 +2669,7 @@ function IngredientsPanel() {
                   <td style={{ padding: ".85rem 1.25rem" }}>
                     <div style={{ display: "flex", gap: ".45rem", flexWrap: "wrap" }}>
                       <button onClick={() => { setEditing(i); setView("form"); }} style={ghostBtn}>Editar</button>
-                      <button onClick={() => setRestocking({ id: i.id, name: i.name, category: i.category })} style={primaryBtn}>+ Reabastecer</button>
+                      <button onClick={() => { setRestocking({ id: i.id, name: i.name, current: Number(i.stockQuantity) || 0, unit: i.unit }); setQty(String(Number(i.stockQuantity) || 0)); }} style={primaryBtn}>+ Restablecer</button>
                       <button
                         onClick={() => setConfirmDel({ id: i.id, name: i.name })}
                         style={{ padding: ".3rem .75rem", border: "1.5px solid #fecaca", borderRadius: 8, background: "#fff5f5", cursor: "pointer", fontSize: ".78rem", fontFamily: "inherit", color: "#dc2626", fontWeight: 600 }}
@@ -2716,16 +2711,52 @@ function IngredientsPanel() {
         </div>
       )}
 
-      {/* ── Reabastecer ── */}
-      <GlassDialog open={!!restocking} title={`Reabastecer: ${restocking?.name}`} onClose={closeRestock}>
-        <GlassField label={restocking?.category === "helado" ? "Libras a agregar" : "Cantidad a agregar"}>
-          <input type="number" className="g-inp" placeholder="Ej. 10" value={qty} min={0} step="any" onChange={(e) => setQty(e.target.value)} />
-        </GlassField>
-        <GlassField label="Razón (opcional)">
-          <input className="g-inp" placeholder="Reabastecimiento periódico..." value={reason} onChange={(e) => setReason(e.target.value)} />
-        </GlassField>
-        <GlassActions onCancel={closeRestock} onConfirm={handleRestock} loading={saving} confirmDisabled={!qty} />
-      </GlassDialog>
+      {/* ── Modal Restablecer Stock ── */}
+      {restocking && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "1rem" }}
+          onClick={(e) => { if (e.target === e.currentTarget) closeRestock(); }}
+        >
+          <div style={{ background: "#fff", borderRadius: 20, padding: "2rem", width: "100%", maxWidth: 420, boxShadow: "0 24px 64px rgba(0,0,0,.18)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: ".75rem", marginBottom: "1.25rem" }}>
+              <div style={{ width: 48, height: 48, borderRadius: 14, background: "#ecfdf5", border: "1.5px solid #a7f3d0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.4rem" }}>🧪</div>
+              <div>
+                <h2 style={{ fontSize: "1.1rem", fontWeight: 800, color: "#111", margin: 0 }}>Restablecer stock</h2>
+                <p style={{ fontSize: ".8rem", color: "#6c757d", marginTop: ".1rem" }}>{restocking.name}</p>
+              </div>
+            </div>
+            <p style={{ fontSize: ".85rem", color: "#6c757d", marginBottom: "1rem", lineHeight: 1.5 }}>
+              Stock actual: <strong style={{ color: "#0369a1" }}>{restocking.current} {restocking.unit ?? "u."}</strong> — Ingresá la nueva cantidad total disponible.
+            </p>
+            <input
+              type="number"
+              min={0}
+              step="any"
+              value={qty}
+              onChange={(e) => setQty(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleRestock(); }}
+              style={{ width: "100%", padding: ".75rem 1rem", border: "1.5px solid #d1d5db", borderRadius: 10, fontSize: "1rem", fontFamily: "inherit", boxSizing: "border-box", marginBottom: "1.25rem", outline: "none" }}
+              autoFocus
+              placeholder="Ej: 50"
+            />
+            <div style={{ display: "flex", gap: ".75rem", justifyContent: "flex-end" }}>
+              <button
+                onClick={closeRestock}
+                style={{ padding: ".6rem 1.5rem", border: "1.5px solid #e9ecef", borderRadius: 10, background: "#fff", cursor: "pointer", fontSize: ".9rem", fontFamily: "inherit", color: "#6c757d" }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleRestock}
+                disabled={saving}
+                style={{ padding: ".6rem 1.5rem", background: saving ? "#adb5bd" : "linear-gradient(135deg, #10b981, #065f46)", color: "#fff", border: "none", borderRadius: 10, cursor: saving ? "not-allowed" : "pointer", fontWeight: 700, fontSize: ".9rem", fontFamily: "inherit" }}
+              >
+                {saving ? "Guardando…" : "Actualizar stock"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <SuccessModal
         open={!!success}
