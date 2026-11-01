@@ -961,7 +961,7 @@ function Dashboard() {
             d.setDate(d.getDate() - i);
             const iso = d.toISOString().slice(0, 10);
             const label = i === 0 ? "Hoy" : d.toLocaleDateString("es-GT", { weekday: "short", day: "numeric" });
-            const match = (monthRev?.byDay ?? []).find((r: any) => r.date === iso);
+            const match = (monthRev?.byDay ?? []).find((r: any) => String(r.date).slice(0, 10) === iso);
             days6.push({ label, date: iso, revenue: Number(match?.revenue ?? 0), orders: Number(match?.orders ?? 0) });
           }
           const maxRev = Math.max(...days6.map((d) => d.revenue), 1);
