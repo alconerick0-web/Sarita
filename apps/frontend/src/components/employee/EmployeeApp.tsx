@@ -931,10 +931,8 @@ export default function EmployeeApp({ userName }: { userName: string }) {
                 {product.containerSize && (
                   <p style={{ fontSize: '.75rem', color: '#adb5bd', marginBottom: '.65rem' }}>{product.containerSize}</p>
                 )}
-                {available !== null && (
-                  <p style={{ fontSize: '.75rem', fontWeight: 700, color: soldOut ? '#dc2626' : '#0369a1', marginBottom: '.65rem' }}>
-                    {soldOut ? 'Agotado' : `Stock: ${available}`}
-                  </p>
+                {soldOut && (
+                  <p style={{ fontSize: '.75rem', fontWeight: 700, color: '#dc2626', marginBottom: '.65rem' }}>Agotado</p>
                 )}
                 <div style={{ marginTop: 'auto', display: 'flex', flexWrap: 'wrap', gap: '.4rem', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: '1.05rem', fontWeight: 900, color: '#ec0927', letterSpacing: '-.3px' }}>Q{Number(product.price).toFixed(2)}</span>
