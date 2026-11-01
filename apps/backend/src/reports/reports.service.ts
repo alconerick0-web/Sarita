@@ -24,13 +24,13 @@ export class ReportsService {
 
     const result = await this.orderRepo
       .createQueryBuilder('o')
-      .select('DATE(o.completed_at)', 'date')
+      .select("DATE(o.completed_at AT TIME ZONE 'America/Guatemala')", 'date')
       .addSelect('SUM(o.total)', 'revenue')
       .addSelect('COUNT(o.id)', 'orders')
       .where('o.status = :status', { status: OrderStatus.COMPLETED })
       .andWhere('o.completed_at >= :from', { from })
-      .groupBy('DATE(o.completed_at)')
-      .orderBy('DATE(o.completed_at)', 'ASC')
+      .groupBy("DATE(o.completed_at AT TIME ZONE 'America/Guatemala')")
+      .orderBy("DATE(o.completed_at AT TIME ZONE 'America/Guatemala')", 'ASC')
       .getRawMany();
 
     const total = result.reduce((sum, r) => sum + Number(r.revenue), 0);
@@ -70,15 +70,12 @@ export class ReportsService {
   }
 
   async getDashboardStats() {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
     const todayRevenue = await this.orderRepo
       .createQueryBuilder('o')
       .select('COALESCE(SUM(o.total), 0)', 'total')
       .addSelect('COUNT(o.id)', 'count')
       .where('o.status = :s', { s: OrderStatus.COMPLETED })
-      .andWhere('o.completed_at >= :today', { today })
+      .andWhere("DATE(o.completed_at AT TIME ZONE 'America/Guatemala') = DATE(NOW() AT TIME ZONE 'America/Guatemala')")
       .getRawOne();
 
     const weekAgo = new Date();
