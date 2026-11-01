@@ -1929,9 +1929,10 @@ function ProductsPanel({ line = "heladeria" }: { line?: string }) {
     }
   }
 
-  async function handleRestock() {
+  async function handleRestock(mode: "set" | "add") {
     if (!restockProduct) return;
-    const qty = Math.max(0, Math.floor(Number(restockQty) || 0));
+    const val = Math.max(0, Math.floor(Number(restockQty) || 0));
+    const qty = mode === "add" ? restockProduct.current + val : val;
     setRestocking(true);
     try {
       const updated = await api.updateProduct(restockProduct.id, { stockQuantity: qty }) as any;
@@ -2267,31 +2268,41 @@ function ProductsPanel({ line = "heladeria" }: { line?: string }) {
               </div>
             </div>
             <p style={{ fontSize: ".85rem", color: "#6c757d", marginBottom: "1rem", lineHeight: 1.5 }}>
-              Stock actual: <strong style={{ color: "#0369a1" }}>{restockProduct.current} u.</strong> — Ingresá la nueva cantidad total de unidades disponibles.
+              Stock actual: <strong style={{ color: "#0369a1" }}>{restockProduct.current} u.</strong>
             </p>
             <input
               type="number"
               min={0}
               value={restockQty}
               onChange={(e) => setRestockQty(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleRestock(); }}
+              onKeyDown={(e) => { if (e.key === "Enter") handleRestock("set"); }}
               style={{ width: "100%", padding: ".75rem 1rem", border: "1.5px solid #d1d5db", borderRadius: 10, fontSize: "1rem", fontFamily: "inherit", boxSizing: "border-box", marginBottom: "1.25rem", outline: "none" }}
               autoFocus
               placeholder="Ej: 50"
             />
-            <div style={{ display: "flex", gap: ".75rem", justifyContent: "flex-end" }}>
+            <div style={{ display: "flex", gap: ".75rem", flexWrap: "wrap" }}>
               <button
                 onClick={() => { setRestockProduct(null); setRestockQty(""); }}
-                style={{ padding: ".6rem 1.5rem", border: "1.5px solid #e9ecef", borderRadius: 10, background: "#fff", cursor: "pointer", fontSize: ".9rem", fontFamily: "inherit", color: "#6c757d" }}
+                style={{ padding: ".6rem 1.2rem", border: "1.5px solid #e9ecef", borderRadius: 10, background: "#fff", cursor: "pointer", fontSize: ".85rem", fontFamily: "inherit", color: "#6c757d" }}
               >
                 Cancelar
               </button>
+              <div style={{ flex: 1 }} />
               <button
-                onClick={handleRestock}
+                onClick={() => handleRestock("add")}
                 disabled={restocking}
-                style={{ padding: ".6rem 1.5rem", background: restocking ? "#adb5bd" : "linear-gradient(135deg, #10b981, #065f46)", color: "#fff", border: "none", borderRadius: 10, cursor: restocking ? "not-allowed" : "pointer", fontWeight: 700, fontSize: ".9rem", fontFamily: "inherit" }}
+                style={{ padding: ".6rem 1.2rem", background: restocking ? "#adb5bd" : "linear-gradient(135deg, #3b82f6, #1d4ed8)", color: "#fff", border: "none", borderRadius: 10, cursor: restocking ? "not-allowed" : "pointer", fontWeight: 700, fontSize: ".85rem", fontFamily: "inherit" }}
+                title={`Suma al stock actual: ${restockProduct.current} + ${Number(restockQty)||0} = ${restockProduct.current + (Number(restockQty)||0)}`}
               >
-                {restocking ? "Guardando…" : "Actualizar stock"}
+                {restocking ? "…" : `+ Sumar (= ${restockProduct.current + (Math.max(0, Number(restockQty)||0))} u.)`}
+              </button>
+              <button
+                onClick={() => handleRestock("set")}
+                disabled={restocking}
+                style={{ padding: ".6rem 1.2rem", background: restocking ? "#adb5bd" : "linear-gradient(135deg, #10b981, #065f46)", color: "#fff", border: "none", borderRadius: 10, cursor: restocking ? "not-allowed" : "pointer", fontWeight: 700, fontSize: ".85rem", fontFamily: "inherit" }}
+                title="Reemplaza el stock con esta cantidad"
+              >
+                {restocking ? "Guardando…" : "Establecer total"}
               </button>
             </div>
           </div>
@@ -2602,9 +2613,10 @@ function IngredientsPanel() {
     setQty("");
   }
 
-  async function handleRestock() {
+  async function handleRestock(mode: "set" | "add") {
     if (!restocking) return;
-    const newQty = Math.max(0, Number(qty) || 0);
+    const val = Math.max(0, Number(qty) || 0);
+    const newQty = mode === "add" ? restocking.current + val : val;
     setSaving(true);
     try {
       await api.updateIngredient(restocking.id, { stockQuantity: newQty });
@@ -2865,7 +2877,7 @@ function IngredientsPanel() {
               </div>
             </div>
             <p style={{ fontSize: ".85rem", color: "#6c757d", marginBottom: "1rem", lineHeight: 1.5 }}>
-              Stock actual: <strong style={{ color: "#0369a1" }}>{restocking.current} {restocking.unit ?? "u."}</strong> — Ingresá la nueva cantidad total disponible.
+              Stock actual: <strong style={{ color: "#0369a1" }}>{restocking.current} {restocking.unit ?? "u."}</strong>
             </p>
             <input
               type="number"
@@ -2873,24 +2885,34 @@ function IngredientsPanel() {
               step="any"
               value={qty}
               onChange={(e) => setQty(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleRestock(); }}
+              onKeyDown={(e) => { if (e.key === "Enter") handleRestock("set"); }}
               style={{ width: "100%", padding: ".75rem 1rem", border: "1.5px solid #d1d5db", borderRadius: 10, fontSize: "1rem", fontFamily: "inherit", boxSizing: "border-box", marginBottom: "1.25rem", outline: "none" }}
               autoFocus
               placeholder="Ej: 50"
             />
-            <div style={{ display: "flex", gap: ".75rem", justifyContent: "flex-end" }}>
+            <div style={{ display: "flex", gap: ".75rem", flexWrap: "wrap" }}>
               <button
                 onClick={closeRestock}
-                style={{ padding: ".6rem 1.5rem", border: "1.5px solid #e9ecef", borderRadius: 10, background: "#fff", cursor: "pointer", fontSize: ".9rem", fontFamily: "inherit", color: "#6c757d" }}
+                style={{ padding: ".6rem 1.2rem", border: "1.5px solid #e9ecef", borderRadius: 10, background: "#fff", cursor: "pointer", fontSize: ".85rem", fontFamily: "inherit", color: "#6c757d" }}
               >
                 Cancelar
               </button>
+              <div style={{ flex: 1 }} />
               <button
-                onClick={handleRestock}
+                onClick={() => handleRestock("add")}
                 disabled={saving}
-                style={{ padding: ".6rem 1.5rem", background: saving ? "#adb5bd" : "linear-gradient(135deg, #10b981, #065f46)", color: "#fff", border: "none", borderRadius: 10, cursor: saving ? "not-allowed" : "pointer", fontWeight: 700, fontSize: ".9rem", fontFamily: "inherit" }}
+                style={{ padding: ".6rem 1.2rem", background: saving ? "#adb5bd" : "linear-gradient(135deg, #3b82f6, #1d4ed8)", color: "#fff", border: "none", borderRadius: 10, cursor: saving ? "not-allowed" : "pointer", fontWeight: 700, fontSize: ".85rem", fontFamily: "inherit" }}
+                title={`Suma al stock actual: ${restocking.current} + ${Number(qty)||0}`}
               >
-                {saving ? "Guardando…" : "Actualizar stock"}
+                {saving ? "…" : `+ Sumar (= ${(restocking.current + Math.max(0, Number(qty)||0)).toFixed(2)} ${restocking.unit ?? "u."})`}
+              </button>
+              <button
+                onClick={() => handleRestock("set")}
+                disabled={saving}
+                style={{ padding: ".6rem 1.2rem", background: saving ? "#adb5bd" : "linear-gradient(135deg, #10b981, #065f46)", color: "#fff", border: "none", borderRadius: 10, cursor: saving ? "not-allowed" : "pointer", fontWeight: 700, fontSize: ".85rem", fontFamily: "inherit" }}
+                title="Reemplaza el stock con esta cantidad"
+              >
+                {saving ? "Guardando…" : "Establecer total"}
               </button>
             </div>
           </div>
