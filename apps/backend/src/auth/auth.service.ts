@@ -21,7 +21,7 @@ export class AuthService {
       throw new UnauthorizedException('Credenciales incorrectas');
     }
 
-    const payload = { sub: user.id, email: user.email };
+    const payload = { sub: user.id, email: user.email, name: user.name };
     const token = this.jwtService.sign(payload);
 
     res.cookie('access_token', token, {
