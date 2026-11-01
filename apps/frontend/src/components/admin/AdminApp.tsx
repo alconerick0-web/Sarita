@@ -1867,6 +1867,10 @@ function ProductsPanel({ line = "heladeria" }: { line?: string }) {
   const [restockQty, setRestockQty]         = useState("");
   const [restocking, setRestocking]         = useState(false);
 
+  // Restock picker
+  const [showRestockPicker, setShowRestockPicker] = useState(false);
+  const [restockSearch, setRestockSearch]         = useState("");
+
   // Export modal
   const [showExportModal, setShowExportModal]   = useState(false);
   const [exportFilter, setExportFilter]         = useState<"all" | "category">("all");
@@ -1951,55 +1955,57 @@ function ProductsPanel({ line = "heladeria" }: { line?: string }) {
     <div style={{ maxWidth: 1200, margin: "0 auto", padding: "2rem 1.5rem", animation: "pageEnter .35s cubic-bezier(.4,0,.2,1)" }}>
       <PageHeader title={isPal ? "Paletas" : "Productos"} subtitle={isPal ? "Gestión del catálogo de paletería" : "Gestión del catálogo de productos"} />
 
-      {/* ── Crear + Exportar ── */}
+      {/* ── Acciones principales ── */}
       <div style={{ display: "flex", gap: "1rem", marginBottom: "1.25rem", alignItems: "stretch" }}>
-        {/* Create card */}
+        {/* Card: Nuevo producto */}
         <div
-          role="button"
-          tabIndex={0}
+          role="button" tabIndex={0}
           onClick={() => { setEditing(null); setView("form"); }}
           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { setEditing(null); setView("form"); } }}
-          style={{
-            flex: 1,
-            background: "linear-gradient(135deg, #fff0f2 0%, #fff8f5 55%, #f5f0ff 100%)",
-            border: "2px dashed rgba(236,9,39,.35)", borderRadius: 16,
-            padding: "1.35rem 2rem", cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-            transition: "all .2s",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = "linear-gradient(135deg, #ffe0e5 0%, #fff0e8 55%, #ece8ff 100%)";
-            e.currentTarget.style.transform = "translateY(-2px)";
-            e.currentTarget.style.boxShadow = "0 8px 32px rgba(236,9,39,.12)";
-            e.currentTarget.style.borderColor = "rgba(236,9,39,.6)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = "linear-gradient(135deg, #fff0f2 0%, #fff8f5 55%, #f5f0ff 100%)";
-            e.currentTarget.style.transform = "none";
-            e.currentTarget.style.boxShadow = "none";
-            e.currentTarget.style.borderColor = "rgba(236,9,39,.35)";
-          }}
+          style={{ flex: 1, background: "linear-gradient(135deg, #fff0f2 0%, #fff8f5 55%, #f5f0ff 100%)", border: "2px dashed rgba(236,9,39,.35)", borderRadius: 16, padding: "1.35rem 2rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", transition: "all .2s" }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "linear-gradient(135deg, #ffe0e5 0%, #fff0e8 55%, #ece8ff 100%)"; e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 32px rgba(236,9,39,.12)"; e.currentTarget.style.borderColor = "rgba(236,9,39,.6)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "linear-gradient(135deg, #fff0f2 0%, #fff8f5 55%, #f5f0ff 100%)"; e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.borderColor = "rgba(236,9,39,.35)"; }}
         >
           <div>
             <p style={{ fontSize: ".68rem", fontWeight: 700, color: "#ec0927", textTransform: "uppercase", letterSpacing: "1.4px", marginBottom: ".2rem" }}>
-              Nuevo producto
+              {isPal ? "Nueva paleta" : "Nuevo producto"}
             </p>
             <h3 style={{ fontSize: "1.15rem", fontWeight: 800, color: "#1a1d23", letterSpacing: "-.2px" }}>
               ¿Listo para agregar algo nuevo al menú?
             </h3>
             <p style={{ fontSize: ".8rem", color: "#9ca3af", marginTop: ".2rem" }}>
-              {isPal ? "Crea paletas — sin receta de ingredientes" : "Crea helados, malteadas, combos y más — con receta de ingredientes incluida"}
+              {isPal ? "Registrá una nueva paleta en el catálogo" : "Crea helados, malteadas, combos y más — con receta de ingredientes incluida"}
             </p>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexShrink: 0 }}>
-            <span style={{ fontSize: "2.5rem" }}>🍦</span>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: "linear-gradient(135deg, #ec0927, #7a0000)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: "1.5rem", fontWeight: 700, boxShadow: "0 4px 14px rgba(236,9,39,.35)" }}>
-              +
-            </div>
+            <span style={{ fontSize: "2.5rem" }}>{isPal ? "🍡" : "🍦"}</span>
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: "linear-gradient(135deg, #ec0927, #7a0000)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: "1.5rem", fontWeight: 700, boxShadow: "0 4px 14px rgba(236,9,39,.35)" }}>+</div>
           </div>
         </div>
 
-        {/* Export card */}
+        {/* Card: Reingresar stock (solo paletería) */}
+        {isPal && (
+        <div
+          role="button" tabIndex={0}
+          onClick={() => { setRestockSearch(""); setShowRestockPicker(true); }}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { setRestockSearch(""); setShowRestockPicker(true); } }}
+          style={{ flex: 1, background: "linear-gradient(135deg, #f0fdf4 0%, #f0fff8 55%, #ecfdf5 100%)", border: "2px dashed rgba(16,185,129,.35)", borderRadius: 16, padding: "1.35rem 2rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", transition: "all .2s" }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "linear-gradient(135deg, #d1fae5 0%, #dcfce7 55%, #d1fae5 100%)"; e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 32px rgba(16,185,129,.12)"; e.currentTarget.style.borderColor = "rgba(16,185,129,.6)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "linear-gradient(135deg, #f0fdf4 0%, #f0fff8 55%, #ecfdf5 100%)"; e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.borderColor = "rgba(16,185,129,.35)"; }}
+        >
+          <div>
+            <p style={{ fontSize: ".68rem", fontWeight: 700, color: "#10b981", textTransform: "uppercase", letterSpacing: "1.4px", marginBottom: ".2rem" }}>Reingresar stock</p>
+            <h3 style={{ fontSize: "1.15rem", fontWeight: 800, color: "#1a1d23", letterSpacing: "-.2px" }}>¿Llegaron paletas nuevas?</h3>
+            <p style={{ fontSize: ".8rem", color: "#9ca3af", marginTop: ".2rem" }}>Actualizá la cantidad disponible de cualquier paleta</p>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexShrink: 0 }}>
+            <span style={{ fontSize: "2.5rem" }}>📦</span>
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: "linear-gradient(135deg, #10b981, #065f46)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: "1.3rem", fontWeight: 700, boxShadow: "0 4px 14px rgba(16,185,129,.35)" }}>↩</div>
+          </div>
+        </div>
+        )}
+
+        {/* Card: Exportar recetas (solo heladería) */}
         {!isPal && (
         <div
           role="button"
@@ -2188,6 +2194,59 @@ function ProductsPanel({ line = "heladeria" }: { line?: string }) {
               <button onClick={handleDelete} disabled={deleting} style={{ padding: ".6rem 1.5rem", background: deleting ? "#adb5bd" : "#dc2626", color: "#fff", border: "none", borderRadius: 10, cursor: deleting ? "not-allowed" : "pointer", fontWeight: 700, fontSize: ".9rem", fontFamily: "inherit" }}>
                 {deleting ? "Desactivando…" : "Sí, eliminar"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Picker: Seleccionar paleta para restock ── */}
+      {showRestockPicker && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "1rem" }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowRestockPicker(false); }}
+        >
+          <div style={{ background: "#fff", borderRadius: 20, padding: "1.75rem", width: "100%", maxWidth: 480, boxShadow: "0 24px 64px rgba(0,0,0,.18)", maxHeight: "80vh", display: "flex", flexDirection: "column" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: ".75rem", marginBottom: "1.25rem" }}>
+              <div style={{ width: 44, height: 44, borderRadius: 12, background: "#ecfdf5", border: "1.5px solid #a7f3d0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.3rem", flexShrink: 0 }}>📦</div>
+              <div>
+                <h2 style={{ fontSize: "1.05rem", fontWeight: 800, color: "#111", margin: 0 }}>Reingresar stock</h2>
+                <p style={{ fontSize: ".78rem", color: "#6c757d", marginTop: ".1rem" }}>Seleccioná una paleta para actualizar su cantidad</p>
+              </div>
+              <button onClick={() => setShowRestockPicker(false)} style={{ marginLeft: "auto", border: "none", background: "none", cursor: "pointer", fontSize: "1.2rem", color: "#9ca3af", padding: ".25rem", flexShrink: 0 }}>✕</button>
+            </div>
+            <input
+              type="text"
+              placeholder="Buscar paleta..."
+              value={restockSearch}
+              onChange={(e) => setRestockSearch(e.target.value)}
+              autoFocus
+              style={{ width: "100%", padding: ".65rem .9rem", border: "1.5px solid #e9ecef", borderRadius: 10, fontSize: ".9rem", fontFamily: "inherit", outline: "none", marginBottom: ".75rem", boxSizing: "border-box" }}
+            />
+            <div style={{ overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: ".4rem" }}>
+              {products
+                .filter((p) => p.active !== false && p.name.toLowerCase().includes(restockSearch.toLowerCase()))
+                .map((p) => (
+                  <div
+                    key={p.id}
+                    role="button" tabIndex={0}
+                    onClick={() => { setRestockProduct({ id: p.id, name: p.name, current: Number(p.stockQuantity) || 0 }); setRestockQty(String(Number(p.stockQuantity) || 0)); setShowRestockPicker(false); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") { setRestockProduct({ id: p.id, name: p.name, current: Number(p.stockQuantity) || 0 }); setRestockQty(String(Number(p.stockQuantity) || 0)); setShowRestockPicker(false); } }}
+                    style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: ".65rem .9rem", borderRadius: 10, border: "1.5px solid #f1f3f5", cursor: "pointer", transition: "all .15s" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "#f0fdf4"; e.currentTarget.style.borderColor = "#a7f3d0"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = ""; e.currentTarget.style.borderColor = "#f1f3f5"; }}
+                  >
+                    <div>
+                      <p style={{ fontWeight: 600, color: "#111", fontSize: ".88rem", margin: 0 }}>{p.name}</p>
+                      <p style={{ fontSize: ".72rem", color: "#9ca3af", margin: 0 }}>{p.category?.name ?? ""}</p>
+                    </div>
+                    <span style={{ padding: ".3rem .75rem", borderRadius: 99, fontSize: ".78rem", fontWeight: 700, background: Number(p.stockQuantity) > 0 ? "#e0f2fe" : "#f8d7da", color: Number(p.stockQuantity) > 0 ? "#0369a1" : "#721c24", flexShrink: 0 }}>
+                      {Number(p.stockQuantity) || 0} u.
+                    </span>
+                  </div>
+                ))}
+              {products.filter((p) => p.active !== false && p.name.toLowerCase().includes(restockSearch.toLowerCase())).length === 0 && (
+                <p style={{ textAlign: "center", color: "#b0b8c4", fontSize: ".85rem", padding: "1.5rem 0" }}>No se encontraron paletas</p>
+              )}
             </div>
           </div>
         </div>
@@ -2497,6 +2556,10 @@ function IngredientsPanel() {
   const [restocking, setRestocking] = useState<{ id: number; name: string; current: number; unit?: string } | null>(null);
   const [qty, setQty]               = useState("");
 
+  // Restock picker
+  const [showRestockPicker, setShowRestockPicker] = useState(false);
+  const [restockSearch, setRestockSearch]         = useState("");
+
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState("");
   const [error, setError]     = useState("");
@@ -2608,24 +2671,45 @@ function IngredientsPanel() {
         ))}
       </div>
 
-      {/* ── Crear card ── */}
-      <div style={{ marginBottom: "1.25rem" }}>
+      {/* ── Action cards ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1.25rem" }}>
+        {/* Card 1: Nuevo ingrediente */}
         <div
           role="button" tabIndex={0}
           onClick={() => { setEditing(null); setView("form"); }}
           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { setEditing(null); setView("form"); } }}
-          style={{ background: "linear-gradient(135deg, #fff0f2 0%, #fff8f5 55%, #f0f5ff 100%)", border: "2px dashed rgba(236,9,39,.35)", borderRadius: 16, padding: "1.35rem 2rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", transition: "all .2s" }}
+          style={{ background: "linear-gradient(135deg, #fff0f2 0%, #fff8f5 55%, #f0f5ff 100%)", border: "2px dashed rgba(236,9,39,.35)", borderRadius: 16, padding: "1.25rem 1.5rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", transition: "all .2s" }}
           onMouseEnter={(e) => { e.currentTarget.style.background = "linear-gradient(135deg, #ffe0e5 0%, #fff0e8 55%, #e0ebff 100%)"; e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 32px rgba(236,9,39,.12)"; e.currentTarget.style.borderColor = "rgba(236,9,39,.6)"; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = "linear-gradient(135deg, #fff0f2 0%, #fff8f5 55%, #f0f5ff 100%)"; e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.borderColor = "rgba(236,9,39,.35)"; }}
         >
           <div>
             <p style={{ fontSize: ".68rem", fontWeight: 700, color: "#ec0927", textTransform: "uppercase", letterSpacing: "1.4px", marginBottom: ".2rem" }}>Nuevo ingrediente</p>
-            <h3 style={{ fontSize: "1.15rem", fontWeight: 800, color: "#1a1d23", letterSpacing: "-.2px" }}>¿Necesitás registrar un insumo?</h3>
-            <p style={{ fontSize: ".8rem", color: "#9ca3af", marginTop: ".2rem" }}>Agrega ingredientes como leche, azúcar o frutas para controlar tu inventario</p>
+            <h3 style={{ fontSize: "1.05rem", fontWeight: 800, color: "#1a1d23", letterSpacing: "-.2px" }}>¿Necesitás registrar un insumo?</h3>
+            <p style={{ fontSize: ".78rem", color: "#9ca3af", marginTop: ".2rem" }}>Agrega leche, azúcar, frutas o insumos al inventario</p>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexShrink: 0 }}>
-            <span style={{ fontSize: "2.5rem" }}>🧪</span>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: "linear-gradient(135deg, #ec0927, #7a0000)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: "1.5rem", fontWeight: 700, boxShadow: "0 4px 14px rgba(236,9,39,.35)" }}>+</div>
+          <div style={{ display: "flex", alignItems: "center", gap: ".75rem", flexShrink: 0 }}>
+            <span style={{ fontSize: "2.2rem" }}>🧪</span>
+            <div style={{ width: 40, height: 40, borderRadius: 11, background: "linear-gradient(135deg, #ec0927, #7a0000)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: "1.4rem", fontWeight: 700, boxShadow: "0 4px 14px rgba(236,9,39,.35)" }}>+</div>
+          </div>
+        </div>
+
+        {/* Card 2: Reingresar stock */}
+        <div
+          role="button" tabIndex={0}
+          onClick={() => { setRestockSearch(""); setShowRestockPicker(true); }}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { setRestockSearch(""); setShowRestockPicker(true); } }}
+          style={{ background: "linear-gradient(135deg, #f0fdf4 0%, #f7fffe 55%, #f0fff8 100%)", border: "2px dashed rgba(16,185,129,.35)", borderRadius: 16, padding: "1.25rem 1.5rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", transition: "all .2s" }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "linear-gradient(135deg, #dcfce7 0%, #d1fae5 55%, #ccfbf1 100%)"; e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 32px rgba(16,185,129,.12)"; e.currentTarget.style.borderColor = "rgba(16,185,129,.6)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "linear-gradient(135deg, #f0fdf4 0%, #f7fffe 55%, #f0fff8 100%)"; e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.borderColor = "rgba(16,185,129,.35)"; }}
+        >
+          <div>
+            <p style={{ fontSize: ".68rem", fontWeight: 700, color: "#10b981", textTransform: "uppercase", letterSpacing: "1.4px", marginBottom: ".2rem" }}>Reingresar stock</p>
+            <h3 style={{ fontSize: "1.05rem", fontWeight: 800, color: "#1a1d23", letterSpacing: "-.2px" }}>¿Llegó mercadería?</h3>
+            <p style={{ fontSize: ".78rem", color: "#9ca3af", marginTop: ".2rem" }}>Actualizá la cantidad disponible de cualquier ingrediente</p>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: ".75rem", flexShrink: 0 }}>
+            <span style={{ fontSize: "2.2rem" }}>📦</span>
+            <div style={{ width: 40, height: 40, borderRadius: 11, background: "linear-gradient(135deg, #10b981, #065f46)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: "1.4rem", fontWeight: 700, boxShadow: "0 4px 14px rgba(16,185,129,.35)" }}>↑</div>
           </div>
         </div>
       </div>
@@ -2706,6 +2790,61 @@ function IngredientsPanel() {
               <button onClick={handleDelete} disabled={deleting} style={{ padding: ".5rem 1rem", border: "none", borderRadius: 8, background: "#dc2626", cursor: deleting ? "not-allowed" : "pointer", fontSize: ".85rem", fontFamily: "inherit", color: "#fff", fontWeight: 700, opacity: deleting ? .7 : 1 }}>
                 {deleting ? "Desactivando…" : "Sí, desactivar"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Picker: Seleccionar ingrediente para restock ── */}
+      {showRestockPicker && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "1rem" }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowRestockPicker(false); }}
+        >
+          <div style={{ background: "#fff", borderRadius: 20, padding: "1.75rem", width: "100%", maxWidth: 480, boxShadow: "0 24px 64px rgba(0,0,0,.18)", maxHeight: "80vh", display: "flex", flexDirection: "column" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: ".75rem", marginBottom: "1.25rem" }}>
+              <div style={{ width: 44, height: 44, borderRadius: 12, background: "#ecfdf5", border: "1.5px solid #a7f3d0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.3rem", flexShrink: 0 }}>📦</div>
+              <div>
+                <h2 style={{ fontSize: "1.05rem", fontWeight: 800, color: "#111", margin: 0 }}>Reingresar stock</h2>
+                <p style={{ fontSize: ".78rem", color: "#6c757d", marginTop: ".1rem" }}>Seleccioná un ingrediente para actualizar su cantidad</p>
+              </div>
+              <button onClick={() => setShowRestockPicker(false)} style={{ marginLeft: "auto", border: "none", background: "none", cursor: "pointer", fontSize: "1.2rem", color: "#9ca3af", padding: ".25rem", flexShrink: 0 }}>✕</button>
+            </div>
+            <input
+              type="text"
+              placeholder="Buscar ingrediente..."
+              value={restockSearch}
+              onChange={(e) => setRestockSearch(e.target.value)}
+              autoFocus
+              style={{ width: "100%", padding: ".65rem .9rem", border: "1.5px solid #e9ecef", borderRadius: 10, fontSize: ".9rem", fontFamily: "inherit", outline: "none", marginBottom: ".75rem", boxSizing: "border-box" }}
+            />
+            <div style={{ overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: ".4rem" }}>
+              {ingredients
+                .filter((i) => i.active !== false && i.name.toLowerCase().includes(restockSearch.toLowerCase()))
+                .map((i) => (
+                  <div
+                    key={i.id}
+                    role="button" tabIndex={0}
+                    onClick={() => { setRestocking({ id: i.id, name: i.name, current: Number(i.stockQuantity) || 0, unit: i.unit }); setQty(String(Number(i.stockQuantity) || 0)); setShowRestockPicker(false); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") { setRestocking({ id: i.id, name: i.name, current: Number(i.stockQuantity) || 0, unit: i.unit }); setQty(String(Number(i.stockQuantity) || 0)); setShowRestockPicker(false); } }}
+                    style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: ".65rem .9rem", borderRadius: 10, border: "1.5px solid #f1f3f5", cursor: "pointer", transition: "all .15s" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "#f0fdf4"; e.currentTarget.style.borderColor = "#a7f3d0"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = ""; e.currentTarget.style.borderColor = "#f1f3f5"; }}
+                  >
+                    <div>
+                      <p style={{ fontWeight: 600, color: "#111", fontSize: ".88rem", margin: 0 }}>{i.name}</p>
+                      <p style={{ fontSize: ".72rem", color: "#9ca3af", margin: 0 }}>
+                        {i.category === "plastico" ? "🛍️ Plástico" : i.category === "helado" ? "🍨 Helado" : "🍓 Comestible"}
+                      </p>
+                    </div>
+                    <span style={{ padding: ".3rem .75rem", borderRadius: 99, fontSize: ".78rem", fontWeight: 700, background: Number(i.stockQuantity) > (Number(i.minThreshold) || 0) ? "#e0f2fe" : "#f8d7da", color: Number(i.stockQuantity) > (Number(i.minThreshold) || 0) ? "#0369a1" : "#721c24", flexShrink: 0 }}>
+                      {Number(i.stockQuantity).toFixed(2)} {i.unit ?? "u."}
+                    </span>
+                  </div>
+                ))}
+              {ingredients.filter((i) => i.active !== false && i.name.toLowerCase().includes(restockSearch.toLowerCase())).length === 0 && (
+                <p style={{ textAlign: "center", color: "#b0b8c4", fontSize: ".85rem", padding: "1.5rem 0" }}>No se encontraron ingredientes</p>
+              )}
             </div>
           </div>
         </div>
