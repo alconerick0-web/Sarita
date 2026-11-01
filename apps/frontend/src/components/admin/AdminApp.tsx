@@ -887,7 +887,14 @@ function Dashboard() {
     api.dashboard().then(setStats).catch(() => {});
     api.revenue("month").then(setMonthRev).catch(() => {});
     api.topProducts().then(setTopProds).catch(() => {});
-    api.orders(true).then((all: any[]) => setRecentOrders(all.slice(0, 6))).catch(() => {});
+    api.orders(true).then((all: any[]) => {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const todayOrders = all.filter((o: any) => {
+        const d = o.completedAt ?? o.completed_at ?? o.createdAt ?? o.created_at ?? "";
+        return String(d).slice(0, 10) === todayStr;
+      });
+      setRecentOrders(todayOrders.length > 0 ? todayOrders : all.slice(0, 8));
+    }).catch(() => {});
     api.lowStock().then(setLowStock).catch(() => {});
     Promise.all([
       api.products(false).catch(() => []),
@@ -1091,7 +1098,7 @@ function Dashboard() {
 
           {/* Órdenes recientes */}
           <div style={{ ...card, padding: "1.1rem 1.25rem" }}>
-            {sectionLabel("Órdenes recientes")}
+            {sectionLabel("Órdenes de hoy")}
             {recentOrders.length === 0 ? (
               <p style={{ color: "#b0b8c4", fontSize: ".82rem", textAlign: "center", padding: "1rem 0" }}>No hay órdenes recientes</p>
             ) : (
