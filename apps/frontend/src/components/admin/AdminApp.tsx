@@ -882,11 +882,11 @@ function Dashboard() {
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
   const [lowStock, setLowStock] = useState<any[]>([]);
   const [catalog, setCatalog]   = useState<{ products: number; categories: number; ingredients: number } | null>(null);
+  const [voidConfirm, setVoidConfirm] = useState<any>(null);
+  const [voiding, setVoiding] = useState(false);
+  const [voidError, setVoidError] = useState("");
 
-  useEffect(() => {
-    api.dashboard().then(setStats).catch(() => {});
-    api.revenue("month").then(setMonthRev).catch(() => {});
-    api.topProducts().then(setTopProds).catch(() => {});
+  function loadOrders() {
     api.orders(true).then((all: any[]) => {
       const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Guatemala' });
       const todayOrders = all.filter((o: any) => {
@@ -897,6 +897,29 @@ function Dashboard() {
       });
       setRecentOrders(todayOrders.length > 0 ? todayOrders : all.slice(0, 8));
     }).catch(() => {});
+  }
+
+  async function handleVoid() {
+    if (!voidConfirm) return;
+    setVoiding(true);
+    setVoidError("");
+    try {
+      await api.voidOrder(voidConfirm.id);
+      setVoidConfirm(null);
+      loadOrders();
+      api.dashboard().then(setStats).catch(() => {});
+    } catch (e: any) {
+      setVoidError(e?.message ?? "Error al anular la venta");
+    } finally {
+      setVoiding(false);
+    }
+  }
+
+  useEffect(() => {
+    api.dashboard().then(setStats).catch(() => {});
+    api.revenue("month").then(setMonthRev).catch(() => {});
+    api.topProducts().then(setTopProds).catch(() => {});
+    loadOrders();
     api.lowStock().then(setLowStock).catch(() => {});
     Promise.all([
       api.products(false).catch(() => []),
@@ -924,6 +947,35 @@ function Dashboard() {
 
   return (
     <div style={{ padding: "0 0 2rem", animation: "pageEnter .3s cubic-bezier(.4,0,.2,1)" }}>
+
+      {/* ── Modal Anular Venta ── */}
+      {voidConfirm && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(15,17,23,.65)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem", backdropFilter: "blur(6px)" }}>
+          <div style={{ background: "#fff", borderRadius: 20, width: "100%", maxWidth: 380, padding: "1.75rem", boxShadow: "0 32px 80px rgba(0,0,0,.35)" }}>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: "1rem" }}>
+              <div style={{ width: 52, height: 52, borderRadius: "50%", background: "#fff3cd", border: "2px solid #ffc107", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.5rem" }}>⚠️</div>
+            </div>
+            <h2 style={{ textAlign: "center", fontWeight: 900, fontSize: "1.1rem", color: "#1a1d23", margin: "0 0 .4rem" }}>Anular venta #{voidConfirm.id}</h2>
+            <p style={{ textAlign: "center", color: "#6c757d", fontSize: ".85rem", margin: "0 0 .3rem" }}>
+              Total: <strong style={{ color: "#ec0927" }}>Q{Number(voidConfirm.total ?? 0).toFixed(2)}</strong>
+            </p>
+            <p style={{ textAlign: "center", color: "#6c757d", fontSize: ".82rem", margin: "0 0 1.25rem" }}>
+              Se reintegrará el stock de ingredientes y paleterías consumidos.
+            </p>
+            {voidError && <p style={{ color: "#dc2626", fontSize: ".82rem", textAlign: "center", marginBottom: ".75rem", background: "#fff5f5", padding: ".5rem", borderRadius: 8 }}>{voidError}</p>}
+            <div style={{ display: "flex", gap: ".75rem" }}>
+              <button onClick={() => { setVoidConfirm(null); setVoidError(""); }} disabled={voiding}
+                style={{ flex: 1, padding: ".75rem", borderRadius: 10, border: "1.5px solid #e9ecef", background: "#fff", color: "#6c757d", fontWeight: 600, cursor: "pointer", fontFamily: "inherit", fontSize: ".9rem" }}>
+                Cancelar
+              </button>
+              <button onClick={handleVoid} disabled={voiding}
+                style={{ flex: 1, padding: ".75rem", borderRadius: 10, border: "none", background: voiding ? "#e9ecef" : "linear-gradient(135deg, #dc2626, #991b1b)", color: "#fff", fontWeight: 800, cursor: voiding ? "not-allowed" : "pointer", fontFamily: "inherit", fontSize: ".9rem" }}>
+                {voiding ? "Anulando…" : "Sí, anular"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Hero header ── */}
       <div style={{ padding: "1.75rem 2rem 1rem" }}>
@@ -1107,7 +1159,7 @@ function Dashboard() {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".82rem" }}>
                 <thead>
                   <tr>
-                    {["#", "Cliente", "Total", "Estado", "Fecha"].map((h) => (
+                    {["#", "Cliente", "Total", "Estado", "Hora", ""].map((h) => (
                       <th key={h} style={{ padding: ".45rem .65rem", textAlign: "left", fontWeight: 600, color: "#9aa3af", fontSize: ".7rem", textTransform: "uppercase", letterSpacing: ".4px", borderBottom: "1px solid #f1f3f5" }}>{h}</th>
                     ))}
                   </tr>
@@ -1134,6 +1186,16 @@ function Dashboard() {
                           </span>
                         </td>
                         <td style={{ padding: ".55rem .65rem", color: "#9aa3af", fontSize: ".72rem" }}>{timeStr}</td>
+                        <td style={{ padding: ".55rem .65rem" }}>
+                          {o.status === "completed" && (
+                            <button
+                              onClick={() => { setVoidConfirm(o); setVoidError(""); }}
+                              style={{ padding: ".25rem .65rem", fontSize: ".7rem", fontWeight: 700, borderRadius: 6, border: "1.5px solid #fca5a5", background: "#fff5f5", color: "#dc2626", cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}
+                              onMouseEnter={(e) => { e.currentTarget.style.background = "#fee2e2"; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.background = "#fff5f5"; }}
+                            >Anular</button>
+                          )}
+                        </td>
                       </tr>
                     );
                   })}

@@ -149,6 +149,37 @@ export class OrdersService {
     return this.orderRepo.save(order);
   }
 
+  async voidOrder(orderId: number, admin: User) {
+    const order = await this.findOne(orderId);
+    if (order.status !== OrderStatus.COMPLETED) throw new BadRequestException('Solo se pueden anular órdenes completadas');
+
+    // Reintegrar ingredientes consumidos
+    const usedItems = await this.usedRepo.find({
+      where: { orderItem: { order: { id: orderId } } },
+      relations: { ingredient: true },
+      withDeleted: true,
+    });
+    for (const used of usedItems) {
+      await this.ingredientsService.restock(used.ingredient.id, used.quantityUsed, `Anulación orden #${orderId}`, admin);
+    }
+
+    // Reintegrar stock de paletería
+    for (const item of order.items) {
+      if (item.product.line === 'paleteria') {
+        await this.productsService.restoreStock(item.product.id, item.quantity);
+      }
+      for (const pc of await this.productsService.getProductComponents(item.product.id)) {
+        if (pc.component) {
+          await this.productsService.restoreStock(pc.component.id, pc.quantity * item.quantity);
+        }
+      }
+    }
+
+    order.status = OrderStatus.CANCELLED;
+    await this.orderRepo.save(order);
+    return order;
+  }
+
   findAll(employeeId?: number) {
     return this.orderRepo.find({
       where: employeeId ? { employee: { id: employeeId } } : {},

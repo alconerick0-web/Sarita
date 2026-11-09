@@ -117,6 +117,10 @@ export class ProductsService {
     await this.repo.decrement({ id: productId }, 'stockQuantity', quantity);
   }
 
+  async restoreStock(productId: number, quantity: number) {
+    await this.repo.increment({ id: productId }, 'stockQuantity', quantity);
+  }
+
   async getProductIngredients(productId: number) {
     return this.piRepo.find({
       where: { product: { id: productId } },

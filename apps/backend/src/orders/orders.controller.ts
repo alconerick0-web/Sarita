@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -45,5 +45,12 @@ export class OrdersController {
   @Post(':id/cancel')
   cancel(@Param('id') id: string) {
     return this.service.cancelOrder(+id);
+  }
+
+  @Patch(':id/void')
+  @UseGuards(RolesGuard)
+  @Roles('admin')
+  void(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.service.voidOrder(+id, user);
   }
 }

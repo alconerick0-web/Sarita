@@ -67,6 +67,8 @@ export const api = {
     request<any>(`/orders/${orderId}/complete`, { method: 'POST' }),
   cancelOrder: (orderId: number) =>
     request(`/orders/${orderId}/cancel`, { method: 'POST' }),
+  voidOrder: (orderId: number) =>
+    request(`/orders/${orderId}/void`, { method: 'PATCH' }),
   orders: (all = false) => request<any[]>(`/orders${all ? '?all=true' : ''}`),
 
   // Invoices
