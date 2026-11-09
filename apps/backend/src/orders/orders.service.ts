@@ -34,12 +34,23 @@ export class OrdersService {
     const product = await this.productsService.findOne(dto.productId);
     const quantity = dto.quantity ?? 1;
 
+    // Check weekly deal for today in Guatemala timezone
+    const gtDay = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].indexOf(
+      new Date().toLocaleDateString('en-US', { timeZone: 'America/Guatemala', weekday: 'short' })
+    );
+    const unitPrice =
+      product.weeklyDealDay !== null &&
+      product.weeklyDealDay === gtDay &&
+      product.weeklyDealPrice !== null
+        ? Number(product.weeklyDealPrice)
+        : Number(product.price);
+
     const item = this.itemRepo.create({
       order,
       product,
       flavor: dto.flavorId ? ({ id: dto.flavorId } as any) : null,
       quantity,
-      unitPrice: product.price,
+      unitPrice,
       customizations: dto.customizations,
     });
     await this.itemRepo.save(item);
