@@ -35,15 +35,18 @@ export class ReportsService {
       fromDate = `${gYear}-${String(gMonth).padStart(2, '0')}-01`;
     }
 
+    // completed_at stores UTC as timestamp WITHOUT time zone — convert correctly:
+    // first cast to UTC timestamptz, then convert to Guatemala local time
+    const gtDate = "DATE((o.completed_at AT TIME ZONE 'UTC') AT TIME ZONE 'America/Guatemala')";
     const result = await this.orderRepo
       .createQueryBuilder('o')
-      .select("DATE(o.completed_at AT TIME ZONE 'America/Guatemala')", 'date')
+      .select(gtDate, 'date')
       .addSelect('SUM(o.total)', 'revenue')
       .addSelect('COUNT(o.id)', 'orders')
       .where('o.status = :status', { status: OrderStatus.COMPLETED })
-      .andWhere("DATE(o.completed_at AT TIME ZONE 'America/Guatemala') >= :fromDate", { fromDate })
-      .groupBy("DATE(o.completed_at AT TIME ZONE 'America/Guatemala')")
-      .orderBy("DATE(o.completed_at AT TIME ZONE 'America/Guatemala')", 'ASC')
+      .andWhere(`${gtDate} >= :fromDate`, { fromDate })
+      .groupBy(gtDate)
+      .orderBy(gtDate, 'ASC')
       .getRawMany();
 
     const total = result.reduce((sum, r) => sum + Number(r.revenue), 0);
@@ -65,7 +68,7 @@ export class ReportsService {
       .addSelect('SUM(oi.quantity)', 'totalSold')
       .addSelect('SUM(oi.unit_price * oi.quantity)', 'totalRevenue')
       .where('o.status = :status', { status: OrderStatus.COMPLETED })
-      .andWhere("DATE(o.completed_at AT TIME ZONE 'America/Guatemala') >= :fromDate", { fromDate })
+      .andWhere("DATE((o.completed_at AT TIME ZONE 'UTC') AT TIME ZONE 'America/Guatemala') >= :fromDate", { fromDate })
       .groupBy('p.id, p.name')
       .orderBy('SUM(oi.quantity)', 'DESC')
       .limit(limit)
@@ -95,7 +98,7 @@ export class ReportsService {
       .select('COALESCE(SUM(o.total), 0)', 'total')
       .addSelect('COUNT(o.id)', 'count')
       .where('o.status = :s', { s: OrderStatus.COMPLETED })
-      .andWhere("DATE(o.completed_at AT TIME ZONE 'America/Guatemala') = DATE(NOW() AT TIME ZONE 'America/Guatemala')")
+      .andWhere("DATE((o.completed_at AT TIME ZONE 'UTC') AT TIME ZONE 'America/Guatemala') = DATE(NOW() AT TIME ZONE 'America/Guatemala')")
       .getRawOne();
 
     const weekAgo = new Date();
@@ -106,7 +109,7 @@ export class ReportsService {
       .select('COALESCE(SUM(o.total), 0)', 'total')
       .addSelect('COUNT(o.id)', 'count')
       .where('o.status = :s', { s: OrderStatus.COMPLETED })
-      .andWhere("DATE(o.completed_at AT TIME ZONE 'America/Guatemala') >= :weekAgoDate", { weekAgoDate })
+      .andWhere("DATE((o.completed_at AT TIME ZONE 'UTC') AT TIME ZONE 'America/Guatemala') >= :weekAgoDate", { weekAgoDate })
       .getRawOne();
 
     const lowStockCount = await this.ingredientRepo
