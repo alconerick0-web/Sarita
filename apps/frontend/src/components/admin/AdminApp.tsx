@@ -888,12 +888,11 @@ function Dashboard() {
     api.revenue("month").then(setMonthRev).catch(() => {});
     api.topProducts().then(setTopProds).catch(() => {});
     api.orders(true).then((all: any[]) => {
-      const now = new Date();
-      const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+      const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Guatemala' });
       const todayOrders = all.filter((o: any) => {
         const raw = o.completedAt ?? o.completed_at ?? o.createdAt ?? o.created_at ?? "";
-        const d = new Date(raw);
-        const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        if (!raw) return false;
+        const ds = new Date(raw).toLocaleDateString('en-CA', { timeZone: 'America/Guatemala' });
         return ds === todayStr;
       });
       setRecentOrders(todayOrders.length > 0 ? todayOrders : all.slice(0, 8));
@@ -969,8 +968,8 @@ function Dashboard() {
           for (let i = 5; i >= 0; i--) {
             const d = new Date();
             d.setDate(d.getDate() - i);
-            const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-            const label = i === 0 ? "Hoy" : d.toLocaleDateString("es-GT", { weekday: "short", day: "numeric" });
+            const iso = d.toLocaleDateString('en-CA', { timeZone: 'America/Guatemala' });
+            const label = i === 0 ? "Hoy" : d.toLocaleDateString("es-GT", { timeZone: 'America/Guatemala', weekday: "short", day: "numeric" });
             const match = (monthRev?.byDay ?? []).find((r: any) => String(r.date).slice(0, 10) === iso);
             days6.push({ label, date: iso, revenue: Number(match?.revenue ?? 0), orders: Number(match?.orders ?? 0) });
           }
@@ -982,7 +981,7 @@ function Dashboard() {
                 {days6.map((d) => {
                   const pct = maxRev > 0 ? (d.revenue / maxRev) * 100 : 0;
                   const barH = Math.max(pct * 0.75, d.revenue > 0 ? 6 : 2);
-                  const _n = new Date(); const isToday = d.date === `${_n.getFullYear()}-${String(_n.getMonth()+1).padStart(2,'0')}-${String(_n.getDate()).padStart(2,'0')}`;
+                  const isToday = d.date === new Date().toLocaleDateString('en-CA', { timeZone: 'America/Guatemala' });
                   return (
                     <div key={d.date} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: ".35rem" }}>
                       <span style={{ fontSize: ".72rem", fontWeight: 700, color: d.revenue > 0 ? "#ec0927" : "#d1d5db" }}>

@@ -17,10 +17,23 @@ export class ReportsService {
 
   async getRevenueSummary(period: 'day' | 'week' | 'month') {
     const now = new Date();
-    const from = new Date(now);
-    if (period === 'day') from.setDate(now.getDate() - 1);
-    else if (period === 'week') from.setDate(now.getDate() - 7);
-    else from.setMonth(now.getMonth() - 1);
+    // Compute from-date in Guatemala timezone so month/week boundaries are correct
+    const gtNow = now.toLocaleDateString('en-CA', { timeZone: 'America/Guatemala' }); // YYYY-MM-DD
+    const [gYear, gMonth] = gtNow.split('-').map(Number);
+
+    let fromDate: string;
+    if (period === 'day') {
+      const d = new Date(now);
+      d.setDate(d.getDate() - 1);
+      fromDate = d.toLocaleDateString('en-CA', { timeZone: 'America/Guatemala' });
+    } else if (period === 'week') {
+      const d = new Date(now);
+      d.setDate(d.getDate() - 7);
+      fromDate = d.toLocaleDateString('en-CA', { timeZone: 'America/Guatemala' });
+    } else {
+      // Start of current calendar month in Guatemala timezone
+      fromDate = `${gYear}-${String(gMonth).padStart(2, '0')}-01`;
+    }
 
     const result = await this.orderRepo
       .createQueryBuilder('o')
@@ -28,24 +41,31 @@ export class ReportsService {
       .addSelect('SUM(o.total)', 'revenue')
       .addSelect('COUNT(o.id)', 'orders')
       .where('o.status = :status', { status: OrderStatus.COMPLETED })
-      .andWhere('o.completed_at >= :from', { from })
+      .andWhere("DATE(o.completed_at AT TIME ZONE 'America/Guatemala') >= :fromDate", { fromDate })
       .groupBy("DATE(o.completed_at AT TIME ZONE 'America/Guatemala')")
       .orderBy("DATE(o.completed_at AT TIME ZONE 'America/Guatemala')", 'ASC')
       .getRawMany();
 
     const total = result.reduce((sum, r) => sum + Number(r.revenue), 0);
-    return { period, from, to: now, total, byDay: result };
+    return { period, from: fromDate, to: gtNow, total, byDay: result };
   }
 
   async getTopProducts(limit = 10) {
+    const startOfMonth = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Guatemala' });
+    const [y, m] = startOfMonth.split('-').map(Number);
+    const fromDate = `${y}-${String(m).padStart(2, '0')}-01`;
+
     return this.itemRepo
       .createQueryBuilder('oi')
       .withDeleted()
       .leftJoin('oi.product', 'p')
+      .innerJoin('oi.order', 'o')
       .select('p.id', 'id')
       .addSelect('p.name', 'name')
       .addSelect('SUM(oi.quantity)', 'totalSold')
       .addSelect('SUM(oi.unit_price * oi.quantity)', 'totalRevenue')
+      .where('o.status = :status', { status: OrderStatus.COMPLETED })
+      .andWhere("DATE(o.completed_at AT TIME ZONE 'America/Guatemala') >= :fromDate", { fromDate })
       .groupBy('p.id, p.name')
       .orderBy('SUM(oi.quantity)', 'DESC')
       .limit(limit)
@@ -80,11 +100,13 @@ export class ReportsService {
 
     const weekAgo = new Date();
     weekAgo.setDate(weekAgo.getDate() - 7);
+    const weekAgoDate = weekAgo.toLocaleDateString('en-CA', { timeZone: 'America/Guatemala' });
     const weekRevenue = await this.orderRepo
       .createQueryBuilder('o')
       .select('COALESCE(SUM(o.total), 0)', 'total')
+      .addSelect('COUNT(o.id)', 'count')
       .where('o.status = :s', { s: OrderStatus.COMPLETED })
-      .andWhere('o.completed_at >= :weekAgo', { weekAgo })
+      .andWhere("DATE(o.completed_at AT TIME ZONE 'America/Guatemala') >= :weekAgoDate", { weekAgoDate })
       .getRawOne();
 
     const lowStockCount = await this.ingredientRepo
@@ -95,7 +117,7 @@ export class ReportsService {
 
     return {
       today: { revenue: Number(todayRevenue.total), orders: Number(todayRevenue.count) },
-      week: { revenue: Number(weekRevenue.total) },
+      week: { revenue: Number(weekRevenue.total), orders: Number(weekRevenue.count) },
       lowStockCount,
     };
   }
