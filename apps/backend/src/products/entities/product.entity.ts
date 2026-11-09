@@ -56,6 +56,9 @@ export class Product {
   @Column({ name: 'weekly_deal_price', type: 'decimal', precision: 10, scale: 2, nullable: true })
   weeklyDealPrice: number | null;
 
+  @Column({ name: 'weekly_deal_min_qty', type: 'int', nullable: true })
+  weeklyDealMinQty: number | null;
+
   @ManyToOne(() => Category, (cat) => cat.products, { eager: true })
   @JoinColumn({ name: 'category_id' })
   category: Category;

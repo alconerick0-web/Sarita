@@ -38,12 +38,12 @@ export class OrdersService {
     const gtDay = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].indexOf(
       new Date().toLocaleDateString('en-US', { timeZone: 'America/Guatemala', weekday: 'short' })
     );
-    const unitPrice =
+    const dealActive =
       product.weeklyDealDay !== null &&
       product.weeklyDealDay === gtDay &&
-      product.weeklyDealPrice !== null
-        ? Number(product.weeklyDealPrice)
-        : Number(product.price);
+      product.weeklyDealPrice !== null &&
+      (product.weeklyDealMinQty === null || quantity >= product.weeklyDealMinQty);
+    const unitPrice = dealActive ? Number(product.weeklyDealPrice) : Number(product.price);
 
     const item = this.itemRepo.create({
       order,

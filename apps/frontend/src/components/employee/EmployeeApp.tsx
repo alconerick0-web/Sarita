@@ -3,7 +3,7 @@ import { api } from '../../lib/api';
 import { ErrorModal, ConfirmModal, GlassDialog } from '../ui/Modal';
 
 type ProductStep = { id: number; stepNumber: number; description: string; requiresFlavor: boolean; flavorCount: number };
-type Product  = { id: number; name: string; price: number; containerSize: string; active: boolean; line?: string; stockQuantity?: number; steps: ProductStep[]; weeklyDealDay?: number | null; weeklyDealPrice?: number | null };
+type Product  = { id: number; name: string; price: number; containerSize: string; active: boolean; line?: string; stockQuantity?: number; steps: ProductStep[]; weeklyDealDay?: number | null; weeklyDealPrice?: number | null; weeklyDealMinQty?: number | null };
 type Category = { id: number; name: string; icon: string; line?: string; products: Product[] };
 type Flavor   = { id: number; name: string; color: string };
 type FlavorSel = { flavorId?: number; flavorName?: string };
@@ -17,7 +17,7 @@ function FlavorPicker({ product, onAdd, onClose }:
   const RBG = '#fff0f2';
 
   const [quantity, setQuantity] = useState(1);
-  const dealPrice = effectivePrice(product);
+  const dealPrice = effectivePrice(product, quantity);
   const isOffer = dealPrice < Number(product.price);
   const total = dealPrice * quantity;
 
@@ -128,7 +128,7 @@ function FlavorPicker({ product, onAdd, onClose }:
 function Carretilla({ items, onRemove, onComplete, onCancel, completing, open, onClose }:
   { items: CartItem[]; onRemove: (i: number) => void; onComplete: () => void; onCancel: () => void; completing: boolean; open?: boolean; onClose?: () => void }) {
 
-  const total = items.reduce((s, i) => s + effectivePrice(i.product) * i.quantity, 0);
+  const total = items.reduce((s, i) => s + effectivePrice(i.product, i.quantity) * i.quantity, 0);
   const count = items.reduce((s, i) => s + i.quantity, 0);
 
   return (
@@ -177,7 +177,7 @@ function Carretilla({ items, onRemove, onComplete, onCancel, completing, open, o
               >×</button>
             </div>
             <div style={{ marginTop: '.55rem', paddingTop: '.5rem', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'flex-end' }}>
-              <span style={{ fontWeight: 800, color: '#ec0927', fontSize: '.9rem' }}>Q{(effectivePrice(item.product) * item.quantity).toFixed(2)}</span>
+              <span style={{ fontWeight: 800, color: '#ec0927', fontSize: '.9rem' }}>Q{(effectivePrice(item.product, item.quantity) * item.quantity).toFixed(2)}</span>
             </div>
           </div>
         ))}
@@ -625,11 +625,14 @@ const GT_DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 function getGtDayOfWeek() {
   return GT_DAYS.indexOf(new Date().toLocaleDateString('en-US', { timeZone: 'America/Guatemala', weekday: 'short' }));
 }
-function effectivePrice(product: Product): number {
+function effectivePrice(product: Product, qty = 1): number {
   const day = getGtDayOfWeek();
-  return (product.weeklyDealDay != null && product.weeklyDealDay === day && product.weeklyDealPrice != null)
-    ? Number(product.weeklyDealPrice)
-    : Number(product.price);
+  const dealActive =
+    product.weeklyDealDay != null &&
+    product.weeklyDealDay === day &&
+    product.weeklyDealPrice != null &&
+    (product.weeklyDealMinQty == null || qty >= product.weeklyDealMinQty);
+  return dealActive ? Number(product.weeklyDealPrice) : Number(product.price);
 }
 
 export default function EmployeeApp({ userName }: { userName: string }) {
@@ -709,9 +712,9 @@ export default function EmployeeApp({ userName }: { userName: string }) {
     const ahora = new Date();
     const f = ahora.toLocaleDateString('es-GT', { year: 'numeric', month: '2-digit', day: '2-digit' });
     const h = ahora.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' });
-    const total = items.reduce((s, i) => s + effectivePrice(i.product) * i.quantity, 0);
+    const total = items.reduce((s, i) => s + effectivePrice(i.product, i.quantity) * i.quantity, 0);
     const itemLines = items.map((it) => {
-      const unit = effectivePrice(it.product);
+      const unit = effectivePrice(it.product, it.quantity);
       const subtotal = unit * it.quantity;
       const header = `<div class="row"><span class="row-left">${it.product.name}</span><span class="row-right">Q${subtotal.toFixed(2)}</span></div>`;
       const detail = it.quantity > 1
@@ -926,8 +929,13 @@ export default function EmployeeApp({ userName }: { userName: string }) {
               const inCart = cart.filter((i) => i.product.id === product.id).reduce((n, i) => n + i.quantity, 0);
               const available = isPal ? Math.max(0, Number(product.stockQuantity ?? 0) - inCart) : null;
               const soldOut = available === 0;
-              const dealPx = effectivePrice(product);
-              const hasOffer = dealPx < Number(product.price);
+              const isBundleDeal = product.weeklyDealDay === getGtDayOfWeek() && product.weeklyDealMinQty != null && product.weeklyDealPrice != null;
+              const isSimpleDeal = product.weeklyDealDay === getGtDayOfWeek() && product.weeklyDealMinQty == null && product.weeklyDealPrice != null && Number(product.weeklyDealPrice) < Number(product.price);
+              const hasOffer = isBundleDeal || isSimpleDeal;
+              const dealPx = isSimpleDeal ? Number(product.weeklyDealPrice) : Number(product.price);
+              const badgeLabel = isBundleDeal
+                ? `${product.weeklyDealMinQty}×Q${(Number(product.weeklyDealPrice) * product.weeklyDealMinQty!).toFixed(0)}`
+                : 'Oferta del día';
               return (
               <button
                 key={product.id}
@@ -944,8 +952,8 @@ export default function EmployeeApp({ userName }: { userName: string }) {
                 onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.borderColor = hasOffer ? '#fbbf24' : '#e9ecef'; }}
               >
                 {hasOffer && (
-                  <div style={{ position: 'absolute', top: '.5rem', right: '.5rem', background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: '#fff', fontSize: '.62rem', fontWeight: 800, padding: '.15rem .45rem', borderRadius: 99, letterSpacing: '.5px', textTransform: 'uppercase' }}>
-                    Oferta del día
+                  <div style={{ position: 'absolute', top: '.5rem', right: '.5rem', background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: '#fff', fontSize: '.62rem', fontWeight: 800, padding: '.15rem .45rem', borderRadius: 99, letterSpacing: '.5px' }}>
+                    {badgeLabel}
                   </div>
                 )}
                 <div style={{ fontSize: '2rem', marginBottom: '.6rem' }}>🍦</div>
@@ -959,7 +967,7 @@ export default function EmployeeApp({ userName }: { userName: string }) {
                 <div style={{ marginTop: 'auto', display: 'flex', flexWrap: 'wrap', gap: '.4rem', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: '.35rem' }}>
                     <span style={{ fontSize: '1.05rem', fontWeight: 900, color: hasOffer ? '#d97706' : '#ec0927', letterSpacing: '-.3px' }}>Q{dealPx.toFixed(2)}</span>
-                    {hasOffer && <span style={{ fontSize: '.75rem', color: '#adb5bd', textDecoration: 'line-through' }}>Q{Number(product.price).toFixed(2)}</span>}
+                    {isSimpleDeal && <span style={{ fontSize: '.75rem', color: '#adb5bd', textDecoration: 'line-through' }}>Q{Number(product.price).toFixed(2)}</span>}
                   </div>
                   {!soldOut && (
                     <span style={{ background: '#fff0f2', color: '#ec0927', fontSize: '.72rem', fontWeight: 700, padding: '.2rem .6rem', borderRadius: 99 }}>+ Agregar</span>
