@@ -653,10 +653,10 @@ export default function EmployeeApp({ userName }: { userName: string }) {
   const [salesLoading, setSalesLoading]   = useState(true);
   const carouselRef = useRef<HTMLDivElement>(null);
 
+  // Día en hora de Guatemala (no la del dispositivo), igual que el dashboard del admin
   function isToday(dateStr: string) {
-    const d = new Date(dateStr);
-    const now = new Date();
-    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+    const gtDay = (d: Date) => d.toLocaleDateString('en-CA', { timeZone: 'America/Guatemala' });
+    return gtDay(new Date(dateStr)) === gtDay(new Date());
   }
 
   async function loadSales() {
@@ -681,6 +681,15 @@ export default function EmployeeApp({ userName }: { userName: string }) {
       if (first) setActiveCat(first.id);
     });
     loadSales();
+    // El POS suele quedar abierto de un día para otro: refrescar para que las ventas de ayer
+    // salgan del listado al cambiar el día (y reflejar ventas anuladas desde el admin)
+    const interval = setInterval(loadSales, 60_000);
+    const onVisible = () => { if (document.visibilityState === 'visible') loadSales(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, []);
 
   async function handleAddToCart(items: CartItem[]) {
